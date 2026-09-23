@@ -1,0 +1,9 @@
+{
+  "version": "1.2.0",
+  "appName": "日本全国陣取りゲーム",
+  "excludedPrefectures": [
+    "tokyo",
+    "osaka"
+  ],
+  "players": 4
+}

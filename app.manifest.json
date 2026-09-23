@@ -1,0 +1,8 @@
+{
+  "name": "日本全国陣取りゲーム",
+  "short_name": "陣取り",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#fffdf8",
+  "theme_color": "#282828"
+}

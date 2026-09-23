@@ -1,0 +1,9 @@
+insert into prefectures(id,name,region) values
+('hokkaido','北海道','北海道'),('aomori','青森','東北'),('iwate','岩手','東北'),('miyagi','宮城','東北'),('akita','秋田','東北'),('yamagata','山形','東北'),('fukushima','福島','東北'),
+('ibaraki','茨城','関東'),('tochigi','栃木','関東'),('gunma','群馬','関東'),('saitama','埼玉','関東'),('chiba','千葉','関東'),('tokyo','東京','関東'),('kanagawa','神奈川','関東'),
+('niigata','新潟','中部'),('toyama','富山','中部'),('ishikawa','石川','中部'),('fukui','福井','中部'),('yamanashi','山梨','中部'),('nagano','長野','中部'),('gifu','岐阜','中部'),('shizuoka','静岡','中部'),('aichi','愛知','中部'),('mie','三重','近畿'),
+('shiga','滋賀','近畿'),('kyoto','京都','近畿'),('osaka','大阪','近畿'),('hyogo','兵庫','近畿'),('nara','奈良','近畿'),('wakayama','和歌山','近畿'),
+('tottori','鳥取','中国'),('shimane','島根','中国'),('okayama','岡山','中国'),('hiroshima','広島','中国'),('yamaguchi','山口','中国'),
+('tokushima','徳島','四国'),('kagawa','香川','四国'),('ehime','愛媛','四国'),('kochi','高知','四国'),
+('fukuoka','福岡','九州・沖縄'),('saga','佐賀','九州・沖縄'),('nagasaki','長崎','九州・沖縄'),('kumamoto','熊本','九州・沖縄'),('oita','大分','九州・沖縄'),('miyazaki','宮崎','九州・沖縄'),('kagoshima','鹿児島','九州・沖縄'),('okinawa','沖縄','九州・沖縄')
+on conflict(id) do nothing;
