@@ -1,387 +1,66 @@
-const CFG = window.APP_CONFIG || {};
-const isSupabaseMode = Boolean(CFG.supabaseUrl && CFG.supabaseAnonKey);
-const supabaseClient = isSupabaseMode ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey) : null;
-
-const PREFS = [
-  ["01","北海道","北海道"],["02","青森県","東北"],["03","岩手県","東北"],["04","宮城県","東北"],["05","秋田県","東北"],["06","山形県","東北"],["07","福島県","東北"],
-  ["08","茨城県","関東"],["09","栃木県","関東"],["10","群馬県","関東"],["11","埼玉県","関東"],["12","千葉県","関東"],["13","東京都","関東"],["14","神奈川県","関東"],
-  ["15","新潟県","中部"],["16","富山県","中部"],["17","石川県","中部"],["18","福井県","中部"],["19","山梨県","中部"],["20","長野県","中部"],["21","岐阜県","中部"],["22","静岡県","中部"],["23","愛知県","中部"],
-  ["24","三重県","近畿"],["25","滋賀県","近畿"],["26","京都府","近畿"],["27","大阪府","近畿"],["28","兵庫県","近畿"],["29","奈良県","近畿"],["30","和歌山県","近畿"],
-  ["31","鳥取県","中国"],["32","島根県","中国"],["33","岡山県","中国"],["34","広島県","中国"],["35","山口県","中国"],
-  ["36","徳島県","四国"],["37","香川県","四国"],["38","愛媛県","四国"],["39","高知県","四国"],
-  ["40","福岡県","九州・沖縄"],["41","佐賀県","九州・沖縄"],["42","長崎県","九州・沖縄"],["43","熊本県","九州・沖縄"],["44","大分県","九州・沖縄"],["45","宮崎県","九州・沖縄"],["46","鹿児島県","九州・沖縄"],["47","沖縄県","九州・沖縄"]
-].map(([code,name,region])=>({code,name,short:name.replace(/[都道府県]$/,""),region}));
-
-const COLORS = [
-  {id:"red",name:"赤",value:"#e85d63"},
-  {id:"blue",name:"青",value:"#3e8fe7"},
-  {id:"green",name:"緑",value:"#46a969"},
-  {id:"yellow",name:"黄",value:"#e9ae36"}
-];
-const STORE_KEY="momo-toride-state-v1";
-
-let state = null;
-let mapSvg = null;
-
-const $ = (s)=>document.querySelector(s);
-const esc = (s)=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
-const todayISO=()=>new Date().toISOString().slice(0,10);
-const colorOf=(id)=>COLORS.find(c=>c.id===id)?.value||"#999";
-
-function blankState(){
-  return {
-    game:{id:"local-game",started:false,startDate:null,period:1,periodStartedAt:null,settings:{homePoints:5,otherPoints:10}},
-    players:Array.from({length:4},(_,i)=>({id:`p${i+1}`,name:["Aさん","Bさん","Cさん","Dさん"][i],residence:"",color:COLORS[i].id})),
-    stays:[],
-    settlements:[],
-    events:[]
-  };
+const MAP_URL='https://raw.githubusercontent.com/geolonia/japanese-prefectures/master/map-mobile.svg';
+const KEY='travel-territory-state-v3';
+const PREFS=[
+['01','北海道','北海道','p1'],['02','青森','東北','p1'],['03','岩手','東北','p1'],['04','宮城','東北','p1'],['05','秋田','東北','p1'],['06','山形','東北','p1'],['07','福島','東北','p1'],
+['08','茨城','関東','p2'],['09','栃木','関東','p2'],['10','群馬','関東','p2'],['11','埼玉','関東','p2'],['12','千葉','関東','p2'],['13','東京','関東','p2'],['14','神奈川','関東','p2'],
+['15','新潟','中部','p3'],['16','富山','中部','p3'],['17','石川','中部','p3'],['18','福井','中部','p3'],['19','山梨','中部','p3'],['20','長野','中部','p3'],['21','岐阜','中部','p3'],['22','静岡','中部','p3'],['23','愛知','中部','p3'],
+['24','三重','近畿','p4'],['25','滋賀','近畿','p4'],['26','京都','近畿','p4'],['27','大阪','近畿','p4'],['28','兵庫','近畿','p4'],['29','奈良','近畿','p4'],['30','和歌山','近畿','p4'],
+['31','鳥取','中国','p1'],['32','島根','中国','p1'],['33','岡山','中国','p1'],['34','広島','中国','p1'],['35','山口','中国','p1'],
+['36','徳島','四国','p2'],['37','香川','四国','p2'],['38','愛媛','四国','p2'],['39','高知','四国','p2'],
+['40','福岡','九州・沖縄','p3'],['41','佐賀','九州・沖縄','p3'],['42','長崎','九州・沖縄','p3'],['43','熊本','九州・沖縄','p3'],['44','大分','九州・沖縄','p3'],['45','宮崎','九州・沖縄','p3'],['46','鹿児島','九州・沖縄','p3'],['47','沖縄','九州・沖縄','p3']];
+const PREF=Object.fromEntries(PREFS.map(p=>[p[0],{code:p[0],name:p[1],region:p[2]}]));
+const COLORS={p1:'#e85d63',p2:'#3e8dde',p3:'#43ad70',p4:'#e8ab2f'};
+const DEFAULT={game:{started:false,startDate:'',period:1,residencePoints:5,otherPoints:10},players:[{id:'p1',name:'プレイヤー1',residence:'',color:'p1'},{id:'p2',name:'プレイヤー2',residence:'',color:'p2'},{id:'p3',name:'プレイヤー3',residence:'',color:'p3'},{id:'p4',name:'プレイヤー4',residence:'',color:'p4'}],stays:[],settlements:[]};
+let state=load();let route='map';let selectedPlayer=null;let selectedPref=null;let photoData='';
+function load(){try{return {...structuredClone(DEFAULT),...JSON.parse(localStorage.getItem(KEY))}}catch{return structuredClone(DEFAULT)}}
+function save(){localStorage.setItem(KEY,JSON.stringify(state))}
+function esc(s=''){return s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+function today(){return new Date().toISOString().slice(0,10)}
+function regionOf(code){return PREF[code]?.region}
+function excludedCodes(){return new Set(state.players.map(p=>p.residence).filter(Boolean))}
+function validStays(){return state.stays.filter(s=>s.valid!==false && state.game.started && s.date>=state.game.startDate && s.date<=today())}
+function owners(){const ex=excludedCodes();const by={};PREFS.forEach(([c])=>{if(ex.has(c)){by[c]={type:'excluded'}}});const groups={};for(const s of validStays()){(groups[s.prefecture]??=[]).push(s)}for(const [code,list] of Object.entries(groups)){if(ex.has(code))continue;const dates=[...new Set(list.map(s=>s.date))];const max=dates.sort().at(-1);const same=list.filter(s=>s.date===max);by[code]=same.length>1?{type:'blank',date:max}:{type:'owned',playerId:same[0].playerId,date:max,stayId:same[0].id}}return by}
+function currentPoints(){const o=owners();const ex=excludedCodes();const result=Object.fromEntries(state.players.map(p=>[p.id,0]));for(const [code,v] of Object.entries(o)){if(v.type!=='owned')continue;const p=state.players.find(x=>x.id===v.playerId);if(!p)continue;const base=regionOf(code)===regionOf(p.residence)?state.game.residencePoints:state.game.otherPoints;result[p.id]+=base}
+return result}
+function countOwned(pid){return Object.values(owners()).filter(v=>v.type==='owned'&&v.playerId===pid).length}
+function playerColor(pid){return COLORS[state.players.find(p=>p.id===pid)?.color]||'#fffdf8'}
+function render(){document.querySelector('#app').innerHTML=`<div class="app">${route==='map'?mapScreen():route==='record'?recordScreen():route==='history'?historyScreen():route==='setup'?setupScreen():route==='admin'?adminScreen():menuScreen()}</div>${nav()}`;if(route==='map')loadMap();}
+function nav(){return `<nav class="bottom-nav">${[['map','🗾','マップ'],['record','📷','記録'],['history','▤','履歴'],['menu','☰','メニュー']].map(([r,i,t])=>`<button class="nav-btn ${route===r?'active':''}" onclick="go('${r}')"><span class="nav-icon">${i}</span>${t}</button>`).join('')}</nav>`}
+function mapScreen(){const pts=currentPoints();return `<header class="topbar"><div><div class="eyebrow">TRAVEL TERRITORY</div><div class="title">日本全国陣取り</div><div class="period">第${state.game.period}期</div></div></header><section class="map-wrap"><div id="map">読み込み中…</div><div class="hokkaido-route"></div></section><div class="legend"><span>● 所有</span><span>■ 未取得</span><span>■ ブランク</span><span>■ 対象外</span><span style="margin-left:auto">対象 ${47-excludedCodes().size}県</span></div><section class="players">${state.players.map(p=>`<button class="player" onclick="showPlayer('${p.id}')"><span class="dot" style="background:${COLORS[p.color]}"></span><div class="player-main"><div class="player-name">${esc(p.name)}</div><div><span class="score">${pts[p.id]||0}pt</span><span class="count">${countOwned(p.id)}県</span></div></div></button>`).join('')}</section>`}
+async function loadMap(){const el=document.querySelector('#map');try{const res=await fetch(MAP_URL);if(!res.ok)throw new Error();const text=await res.text();el.innerHTML=text;const svg=el.querySelector('svg');svg.setAttribute('aria-label','日本全国の都道府県地図');styleMap(svg);addLabels(svg);addRegionLines(svg);svg.querySelectorAll('.prefecture').forEach(g=>{g.addEventListener('click',()=>showPref(g.dataset.code));g.setAttribute('tabindex','0');g.setAttribute('role','button')});}catch{el.innerHTML='<div class="notice">地図データを読み込めませんでした。通信環境を確認してください。</div>'}}
+function styleMap(svg){const o=owners();svg.querySelectorAll('.prefecture').forEach(g=>{const code=g.dataset.code;const v=o[code];let fill='#fffdf8';if(v?.type==='owned')fill=playerColor(v.playerId);if(v?.type==='blank')fill='#d8d8d8';if(v?.type==='excluded')fill='#8d8d8d';g.style.fill=fill;g.style.stroke='#8f887c';g.style.strokeWidth='1.3';if(v?.type==='owned')g.classList.add('owned')});}
+function addLabels(svg){/* The source map already contains accessible prefecture titles; visual labels are kept within the map asset to avoid drifting outside tiny prefectures. */}
+function addRegionLines(svg){
+  const host=document.querySelector('.map-wrap');
+  if(!host || host.querySelector('.region-overlay')) return;
+  const wrap=document.createElement('div'); wrap.className='region-overlay';
+  wrap.innerHTML=`<svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M735 170 L720 245 L695 305 L680 355"/>
+    <path d="M665 345 L630 405 L600 470"/>
+    <path d="M560 485 L535 525 L500 550"/>
+    <path d="M455 565 L425 585 L385 605"/>
+    <path d="M350 610 L320 635 L295 660"/>
+    <path d="M405 705 L455 710 L505 700"/>
+    <path d="M570 760 L620 780 L675 790"/>
+  </svg>`;
+  host.appendChild(wrap);
 }
-function loadLocal(){ try{return JSON.parse(localStorage.getItem(STORE_KEY))||blankState()}catch{return blankState()} }
-function saveLocal(){ localStorage.setItem(STORE_KEY,JSON.stringify(state)) }
-
-function init(){
-  state=loadLocal();
-  renderPlayerForm();
-  if(!state.game.started) showSetup(); else bootGame();
-  bindGlobal();
-}
-function showSetup(){$("#setupView").classList.remove("hidden");$("#gameView").classList.add("hidden")}
-function bootGame(){$("#setupView").classList.add("hidden");$("#gameView").classList.remove("hidden");renderGame();loadMap()}
-function renderPlayerForm(){
-  const root=$("#playerForm"); root.innerHTML="";
-  state.players.forEach((p,i)=>{
-    const row=document.createElement("div");row.className="form-row";
-    row.innerHTML=`<input class="setup-name" data-i="${i}" value="${esc(p.name)}" aria-label="プレイヤー${i+1}の名前">
-      <select class="setup-residence" data-i="${i}" aria-label="${esc(p.name)}の居住県">
-        <option value="">居住県を選択</option>${PREFS.map(x=>`<option value="${x.code}" ${p.residence===x.code?"selected":""}>${x.name}</option>`).join("")}
-      </select>
-      <div class="color-select"><span class="color-swatch" style="background:${colorOf(p.color)}"></span>
-      <select class="setup-color" data-i="${i}">${COLORS.map(c=>`<option value="${c.id}" ${p.color===c.id?"selected":""}>${c.name}</option>`).join("")}</select></div>`;
-    root.appendChild(row);
-  });
-  root.querySelectorAll(".setup-color").forEach(el=>el.addEventListener("change",()=>renderPlayerForm()));
-}
-
-async function setupStart(){
-  const names=[...document.querySelectorAll(".setup-name")].map(x=>x.value.trim());
-  const residences=[...document.querySelectorAll(".setup-residence")].map(x=>x.value);
-  const colors=[...document.querySelectorAll(".setup-color")].map(x=>x.value);
-  if(names.some(n=>!n)||residences.some(r=>!r)){alert("4人全員の名前と居住県を入力してください。");return}
-  if(new Set(colors).size!==4){alert("4人の色は重複できません。");return}
-  state.players=state.players.map((p,i)=>({...p,name:names[i],residence:residences[i],color:colors[i]}));
-  state.game.started=true;state.game.startDate=todayISO();state.game.periodStartedAt=todayISO();
-  state.events.unshift({at:new Date().toISOString(),text:"ゲームを開始しました"});
-  if(isSupabaseMode){
-    try{
-      let g=await supabaseClient.from("games").select("*").eq("is_active",true).order("created_at",{ascending:false}).limit(1).maybeSingle();
-      let game=g.data;
-      if(!game){const ins=await supabaseClient.from("games").insert({name:"日本全国陣取り",start_date:todayISO(),started:true,is_active:true,current_period:1,home_points:5,other_points:10}).select().single();if(ins.error)throw ins.error;game=ins.data}
-      else {const up=await supabaseClient.from("games").update({start_date:todayISO(),started:true,current_period:1}).eq("id",game.id);if(up.error)throw up.error}
-      state.game.id=game.id;
-      for(let i=0;i<4;i++){
-        const old=state.players[i];
-        const existing=await supabaseClient.from("players").select("id").eq("game_id",game.id).eq("slot",i+1).maybeSingle();
-        const row={game_id:game.id,slot:i+1,name:old.name,residence_prefecture:old.residence,color:old.color};
-        const q=existing.data?.id ? await supabaseClient.from("players").update(row).eq("id",existing.data.id) : await supabaseClient.from("players").insert(row);
-        if(q.error)throw q.error;
-      }
-      await refreshFromSupabase();return;
-    }catch(e){console.error(e);alert("Supabaseへのゲーム開始処理に失敗しました。supabase.sqlの実行とRLSを確認してください。");return}
-  }
-  saveLocal();bootGame();
-}
-
-async function loadMap(){
-  const mount=$("#mapMount");
-  mount.innerHTML=`<div class="warning">日本地図を読み込んでいます…</div>`;
-  try{
-    const res=await fetch(CFG.mapSvgUrl,{cache:"force-cache"});
-    if(!res.ok)throw new Error("map fetch failed");
-    const text=await res.text();
-    mount.innerHTML=text;
-    mapSvg=mount.querySelector("svg");
-    mapSvg.setAttribute("role","img");
-    mapSvg.setAttribute("aria-label","47都道府県の日本地図");
-    decorateMap();
-  }catch(e){
-    mount.innerHTML=`<div class="warning">地図の読み込みに失敗しました。ネットワーク接続を確認してください。</div>`;
-  }
-}
-function decorateMap(){
-  const groups=[...mapSvg.querySelectorAll(".prefecture[data-code]")];
-  groups.forEach(g=>{
-    const code=g.dataset.code.padStart(2,"0");
-    const p=PREFS.find(x=>x.code===code); if(!p)return;
-    g.setAttribute("tabindex","0");
-    g.setAttribute("role","button");
-    g.setAttribute("aria-label",p.name);
-    g.addEventListener("click",()=>openPref(code));
-    g.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" ")openPref(code)});
-    const box=g.getBBox();
-    const t=document.createElementNS("http://www.w3.org/2000/svg","text");
-    t.classList.add("pref-label");
-    const len=p.short.length;
-    t.classList.add(len>=5?"small":len===4?"normal":"large");
-    t.setAttribute("x",box.x+box.width/2);
-    t.setAttribute("y",box.y+box.height/2);
-    t.textContent=p.short;
-    g.appendChild(t);
-  });
-  renderMapState();
-}
-function currentOwnersAt(date){
-  const excluded=new Set(state.players.map(p=>p.residence).filter(Boolean));
-  const byPref={};
-  for(const code of PREFS.map(p=>p.code)){
-    if(excluded.has(code)){byPref[code]={status:"out"};continue}
-    const stays=state.stays.filter(s=>s.prefecture===code && s.stayDate>=state.game.startDate && s.stayDate<=date)
-      .sort((a,b)=>a.stayDate.localeCompare(b.stayDate)||a.createdAt.localeCompare(b.createdAt));
-    if(!stays.length){byPref[code]={status:"unclaimed"};continue}
-    const latestDate=stays[stays.length-1].stayDate;
-    const same=stays.filter(s=>s.stayDate===latestDate);
-    const players=new Set(same.map(s=>s.playerId));
-    if(players.size>1){byPref[code]={status:"blank",date:latestDate};continue}
-    byPref[code]={status:"owned",playerId:same[0].playerId,date:latestDate,stay:same[same.length-1]};
-  }
-  return byPref;
-}
-function currentOwners(){return currentOwnersAt(todayISO())}
-function renderMapState(focusPlayerId=null){
-  if(!mapSvg)return;
-  const owners=currentOwners();
-  mapSvg.querySelectorAll(".prefecture[data-code]").forEach(g=>{
-    const code=g.dataset.code.padStart(2,"0"), o=owners[code];
-    g.classList.remove("owned","out","blank","focus-dim","focus-hit");
-    g.style.removeProperty("fill");
-    if(o?.status==="out")g.classList.add("out");
-    else if(o?.status==="blank")g.classList.add("blank");
-    else if(o?.status==="owned"){
-      g.classList.add("owned");g.style.fill=colorOf(state.players.find(p=>p.id===o.playerId)?.color);
-      if(focusPlayerId===o.playerId)g.classList.add("focus-hit");
-      else if(focusPlayerId)g.classList.add("focus-dim");
-    }else if(focusPlayerId)g.classList.add("focus-dim");
-  });
-}
-function ownedBy(pid){return Object.entries(currentOwners()).filter(([,o])=>o.status==="owned"&&o.playerId===pid).map(([code])=>code)}
-function homeRegion(pid){const p=state.players.find(x=>x.id===pid), r=PREFS.find(x=>x.code===p?.residence)?.region;return r}
-function completions(pid){
-  const owners=currentOwners(), home=homeRegion(pid), regions=[...new Set(PREFS.map(p=>p.region))], out=[];
-  regions.forEach(region=>{
-    const targets=PREFS.filter(p=>p.region===region && owners[p.code]?.status!=="out");
-    if(targets.length && targets.every(p=>owners[p.code]?.status==="owned"&&owners[p.code]?.playerId===pid))out.push(region);
-  });
-  return out;
-}
-function monthStarts(){
-  const start=new Date(state.game.startDate+"T00:00:00");
-  const first=new Date(start.getFullYear(),start.getMonth()+1,1);
-  const now=new Date(); const out=[];
-  for(let d=first;d<=now;d=new Date(d.getFullYear(),d.getMonth()+1,1))out.push(d.toISOString().slice(0,10));
-  return out;
-}
-function monthlyPointsFor(pid){
-  const p=state.players.find(x=>x.id===pid), home=homeRegion(pid), out=[];
-  for(const month of monthStarts()){
-    const owners=currentOwnersAt(month), completionsAt=new Set();
-    for(const region of [...new Set(PREFS.map(x=>x.region))]){
-      const targets=PREFS.filter(x=>x.region===region&&owners[x.code]?.status!=="out");
-      if(targets.length&&targets.every(x=>owners[x.code]?.status==="owned"&&owners[x.code]?.playerId===pid))completionsAt.add(region);
-    }
-    for(const pref of PREFS){
-      const o=owners[pref.code];
-      if(o?.status!=="owned"||o.playerId!==pid)continue;
-      let pts=pref.region===home?state.game.settings.homePoints:state.game.settings.otherPoints;
-      if(completionsAt.has(pref.region))pts*=1.5;
-      out.push({month,prefecture:pref.code,points:pts,region:pref.region});
-    }
-  }
-  return out;
-}
-function pointsFor(pid){return monthlyPointsFor(pid).reduce((n,x)=>n+x.points,0)}
-function periodPointsFor(pid){
-  const cutoff=state.settlements.length?state.settlements[state.settlements.length-1].at:null;
-  if(!cutoff)return pointsFor(pid);
-  const lastMonth=cutoff.slice(0,7);
-  return monthlyPointsFor(pid).filter(x=>x.month.slice(0,7)>lastMonth).reduce((n,x)=>n+x.points,0);
-}
-function renderGame(){
-  $("#periodLabel").textContent=`第${state.game.period}期`;
-  const owners=currentOwners();
-  const target=PREFS.filter(p=>owners[p.code]?.status!=="out").length;
-  $("#targetCount").textContent=`対象 ${target}県`;
-  const root=$("#playerCards");root.innerHTML="";
-  state.players.forEach(p=>{
-    const tpl=$("#playerCardTemplate").content.cloneNode(true), card=tpl.querySelector(".player-card");
-    card.querySelector(".player-dot").style.background=colorOf(p.color);
-    card.querySelector(".player-name").textContent=p.name;
-    card.querySelector(".player-points").textContent=`${periodPointsFor(p.id)}pt`;
-    card.querySelector(".player-count").textContent=`${ownedBy(p.id).length}県`;
-    card.addEventListener("click",()=>openPlayer(p.id));
-    root.appendChild(tpl);
-  });
-  const ev=$("#recentEvents");ev.innerHTML=state.events.slice(0,3).map(e=>`<div class="event">${esc(e.text)}</div>`).join("");
-  renderMapState();
-}
-function openPref(code){
-  const p=PREFS.find(x=>x.code===code), o=currentOwners()[code];
-  let body=`<div class="kicker">PREFECTURE</div><h2 class="sheet-title">${esc(p.name)}</h2>`;
-  if(o.status==="out")body+=`<p class="sheet-sub">現在の居住県として対象外です。</p>`;
-  else if(o.status==="blank")body+=`<p class="sheet-sub">同じ滞在日に複数人が登録したため、現在はブランクです。</p>`;
-  else if(o.status==="owned"){const pl=state.players.find(x=>x.id===o.playerId);body+=`<div class="detail-grid"><div class="detail-stat"><b>${esc(pl.name)}</b><span>現在の所有者</span></div><div class="detail-stat"><b>${esc(o.date)}</b><span>最新取得日</span></div></div>`}
-  else body+=`<p class="sheet-sub">未取得。次の旅行先にできます。</p>`;
-  body+=`<button class="primary-btn" onclick="openRecord('${code}')">この県を旅行記録する</button>`;
-  showSheet(body);
-}
-function openPlayer(pid){
-  const p=state.players.find(x=>x.id===pid), codes=ownedBy(pid), comps=completions(pid);
-  showSheet(`<div class="kicker">PLAYER</div><h2 class="sheet-title">${esc(p.name)}</h2><p class="sheet-sub"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${colorOf(p.color)}"></span> ${esc(PREFS.find(x=>x.code===p.residence)?.name||"")}</p>
-  <div class="detail-grid"><div class="detail-stat"><b>${periodPointsFor(pid)}pt</b><span>期間ポイント</span></div><div class="detail-stat"><b>${codes.length}県</b><span>現在の所有</span></div><div class="detail-stat"><b>${settledTotal(pid)}pt</b><span>累積ポイント</span></div><div class="detail-stat"><b>${comps.length}地方</b><span>制覇中</span></div></div>
-  ${comps.length?`<div class="success">制覇中：${comps.join("・")} ／ 対象地方は1.5倍</div>`:""}
-  <h3>所有している県</h3><div class="pref-list">${codes.map(c=>`<button class="pref-tag" onclick="openPref('${c}')">${PREFS.find(x=>x.code===c).short}</button>`).join("")||"<span class='muted'>まだありません</span>"}</div>
-  <button class="primary-btn" onclick="focusPlayer('${pid}')">地図でこの人の県を強調</button>`);
-}
-function settledTotal(pid){return state.settlements.reduce((n,s)=>n+(s.players.find(x=>x.playerId===pid)?.cumulative||0),0)}
-function focusPlayer(pid){closeSheet();renderMapState(pid);setTimeout(()=>document.querySelector(".map-stage")?.scrollIntoView({behavior:"smooth",block:"start"}),50)}
-function openRecord(code=""){
-  const pOpts=state.players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
-  const prefOpts=PREFS.filter(p=>currentOwners()[p.code]?.status!=="out").map(p=>`<option value="${p.code}" ${p.code===code?"selected":""}>${p.name}</option>`).join("");
-  showSheet(`<div class="kicker">TRAVEL LOG</div><h2 class="sheet-title">旅行を記録</h2><p class="sheet-sub">登録後は変更・削除できません。</p>
-  <form id="recordForm" class="form-stack">
-    <label>プレイヤー<select name="player">${pOpts}</select></label>
-    <label>都道府県<select name="prefecture">${prefOpts}</select></label>
-    <label>滞在日<input type="date" name="stayDate" max="${todayISO()}" value="${todayISO()}" required></label>
-    <label>滞在種別<select name="type"><option>食事</option><option>観光</option><option>宿泊</option><option>旅行</option><option>その他</option></select></label>
-    <label>証拠写真1枚<div class="photo-box"><input id="photoInput" name="photo" type="file" accept="image/*" required><div id="photoPreview"></div></div></label>
-    <label>コメント（任意）<textarea name="comment" maxlength="300"></textarea></label>
-    <button class="primary-btn" type="submit">確認画面へ</button>
-  </form>`);
-  $("#photoInput").addEventListener("change",e=>{
-    const f=e.target.files[0];if(!f)return;
-    const u=URL.createObjectURL(f);$("#photoPreview").innerHTML=`<img class="photo-preview" src="${u}" alt="選択した写真">`;
-  });
-  $("#recordForm").addEventListener("submit",e=>{e.preventDefault();confirmRecord(new FormData(e.target))});
-}
-function confirmRecord(fd){
-  const player=state.players.find(p=>p.id===fd.get("player")),pref=PREFS.find(p=>p.code===fd.get("prefecture"));
-  const photo=fd.get("photo");
-  const reader=new FileReader();
-  reader.onload=()=>showSheet(`<div class="kicker">CONFIRM</div><h2 class="sheet-title">この内容で登録しますか？</h2>
-    <div class="detail-grid"><div class="detail-stat"><b>${esc(player.name)}</b><span>プレイヤー</span></div><div class="detail-stat"><b>${esc(pref.name)}</b><span>都道府県</span></div><div class="detail-stat"><b>${esc(fd.get("stayDate"))}</b><span>滞在日</span></div><div class="detail-stat"><b>${esc(fd.get("type"))}</b><span>滞在種別</span></div></div>
-    <img class="photo-preview" src="${reader.result}" alt="証拠写真">
-    <div class="warning">登録後は変更・削除できません。未来の日付とゲーム開始前の日付は登録できません。</div>
-    <button class="primary-btn" id="confirmSave">登録を実行</button>`);
-  $("#confirmSave").onclick=()=>saveStay({...Object.fromEntries(fd.entries()),photoData:reader.result});
-  reader.readAsDataURL(photo);
-}
-async function saveStay(data){
-  if(data.stayDate>todayISO()||data.stayDate<state.game.startDate){alert("滞在日はゲーム開始日以降、今日以前である必要があります。");return}
-  if(isSupabaseMode){
-    try{
-      const file=data.photo;
-      const blob=await (await fetch(file)).blob();
-      const path=`${state.game.id}/${data.player}/${crypto.randomUUID()}.jpg`;
-      const up=await supabaseClient.storage.from("stay-photos").upload(path,blob,{contentType:blob.type||"image/jpeg",upsert:false});
-      if(up.error)throw up.error;
-      const ins=await supabaseClient.from("stays").insert({game_id:state.game.id,player_id:data.player,prefecture_code:data.prefecture,stay_date:data.stayDate,stay_type:data.type,comment:data.comment||null,photo_path:path});
-      if(ins.error)throw ins.error;
-      alert("旅行記録を登録しました。");closeSheet();await refreshFromSupabase();return;
-    }catch(e){console.error(e);alert("Supabaseへの登録に失敗しました。SQLとStorage設定を確認してください。");return}
-  }
-  state.stays.push({id:crypto.randomUUID(),playerId:data.player,prefecture:data.prefecture,stayDate:data.stayDate,type:data.type,comment:data.comment||"",photoData:data.photoData,createdAt:new Date().toISOString()});
-  const p=PREFS.find(x=>x.code===data.prefecture),pl=state.players.find(x=>x.id===data.player);
-  state.events.unshift({at:new Date().toISOString(),text:`${pl.name}が${p.short}を取得`});
-  saveLocal();closeSheet();renderGame();loadMap();
-}
-async function refreshFromSupabase(){
-  if(!isSupabaseMode)return;
-  const [g,ps,ss,se]=await Promise.all([
-    supabaseClient.from("games").select("*").eq("is_active",true).order("created_at",{ascending:false}).limit(1).maybeSingle(),
-    supabaseClient.from("players").select("*").order("slot"),
-    supabaseClient.from("stays").select("*").order("stay_date").order("created_at")
-  ]);
-  if(g.data){state.game={...state.game,...g.data,settings:{homePoints:g.data.home_points||5,otherPoints:g.data.other_points||10},id:g.data.id,started:g.data.started,startDate:g.data.start_date,period:g.data.current_period||1}}
-  if(ps.data?.length)state.players=ps.data.map(p=>({id:p.id,name:p.name,residence:p.residence_prefecture,color:p.color,slot:p.slot}));
-  if(ss.data)state.stays=ss.data.map(s=>({id:s.id,playerId:s.player_id,prefecture:s.prefecture_code,stayDate:s.stay_date,type:s.stay_type,comment:s.comment,createdAt:s.created_at,photoPath:s.photo_path}));
-  state.events=state.stays.slice().reverse().map(s=>({at:s.createdAt,text:`${state.players.find(p=>p.id===s.playerId)?.name||"プレイヤー"}が${PREFS.find(p=>p.code===s.prefecture)?.short||""}を取得`})).slice(0,10);
-  if(state.game.started)bootGame();
-}
-function bindGlobal(){
-  $("#startGameBtn").addEventListener("click",setupStart);
-  $("#recordBtn").addEventListener("click",()=>openRecord());
-  $("#sheetClose").addEventListener("click",closeSheet);
-  $("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet")closeSheet()});
-  $("#adminBtn").addEventListener("click",openAdmin);
-  document.querySelectorAll(".nav-item").forEach(b=>b.addEventListener("click",()=>{
-    document.querySelectorAll(".nav-item").forEach(x=>x.classList.remove("active"));b.classList.add("active");
-    const t=b.dataset.tab;if(t==="record")openRecord();else if(t==="history")openHistory();else if(t==="menu")openAdmin();
-  }));
-}
-function showSheet(html){$("#sheetContent").innerHTML=html;$("#sheet").classList.remove("hidden")}
-function closeSheet(){ $("#sheet").classList.add("hidden");$("#sheetContent").innerHTML=""}
-function openHistory(){
-  showSheet(`<div class="kicker">HISTORY</div><h2 class="sheet-title">取得履歴</h2><p class="sheet-sub">旅行記録は削除・変更できません。</p>${state.stays.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(s=>`<div class="admin-action"><b>${esc(state.players.find(p=>p.id===s.playerId)?.name||"")} → ${esc(PREFS.find(p=>p.code===s.prefecture)?.name||"")}</b><span>${esc(s.stayDate)} ・ ${esc(s.type)}</span></div>`).join("")||"<p class='muted'>まだありません。</p>"}`);
-}
-function openAdmin(){
-  showSheet(`<div class="kicker">ADMIN</div><h2 class="sheet-title">管理</h2><p class="sheet-sub">このMVPでは認証を設けず、管理URLを知っている人が利用する想定です。</p>
-  <div class="admin-grid">
-    <button class="admin-action" onclick="openPlayerAdmin()"><b>プレイヤー管理</b><span>名前・居住県・色</span></button>
-    <button class="admin-action" onclick="openSettings()"><b>ゲーム設定</b><span>居住地方5pt / その他10ptなど</span></button>
-    <button class="admin-action" onclick="settleGame()"><b>この時点で決着する</b><span>地図は維持し、期間ポイントだけ次期へ</span></button>
-    <button class="admin-action" onclick="openSettlements()"><b>決着履歴</b><span>過去の決着を確認</span></button>
-    ${isSupabaseMode?"":"<div class='warning'>現在はローカルデモモードです。Supabase接続後に実データ保存へ切り替わります。</div>"}
-  </div>`);
-}
-function openPlayerAdmin(){
-  showSheet(`<div class="kicker">PLAYERS</div><h2 class="sheet-title">プレイヤー管理</h2><div class="form-stack">${state.players.map((p,i)=>`
-  <label>${i+1}人目
-    <input id="an${i}" value="${esc(p.name)}" placeholder="名前">
-    <select id="ar${i}">${PREFS.map(x=>`<option value="${x.code}" ${p.residence===x.code?"selected":""}>${x.name}</option>`).join("")}</select>
-    <select id="ac${i}">${COLORS.map(c=>`<option value="${c.id}" ${p.color===c.id?"selected":""}>${c.name}</option>`).join("")}</select>
-  </label>`).join("")}<button class="primary-btn" id="savePlayers">保存</button></div>`);
-  $("#savePlayers").onclick=async()=>{
-    state.players=state.players.map((p,i)=>({...p,name:$("#an"+i).value.trim()||p.name,residence:$("#ar"+i).value,color:$("#ac"+i).value}));
-    if(isSupabaseMode){
-      for(let i=0;i<state.players.length;i++){
-        const p=state.players[i];
-        const q=await supabaseClient.from("players").update({name:p.name,residence_prefecture:p.residence,color:p.color}).eq("id",p.id);
-        if(q.error){alert("プレイヤー情報の保存に失敗しました。");return}
-      }
-      await refreshFromSupabase();
-    }else{saveLocal();closeSheet();renderGame();loadMap()}
-  };
-}
-function openSettings(){
-  showSheet(`<div class="kicker">SETTINGS</div><h2 class="sheet-title">ゲーム設定</h2><div class="form-stack">
-  <label>居住地方の月次ポイント<input id="homePts" type="number" min="0" value="${state.game.settings.homePoints}"></label>
-  <label>その他地方の月次ポイント<input id="otherPts" type="number" min="0" value="${state.game.settings.otherPoints}"></label>
-  <button class="primary-btn" id="saveSettings">保存</button></div>`);
-  $("#saveSettings").onclick=async()=>{
-    state.game.settings.homePoints=Number($("#homePts").value);state.game.settings.otherPoints=Number($("#otherPts").value);
-    if(isSupabaseMode){
-      const q=await supabaseClient.from("games").update({home_points:state.game.settings.homePoints,other_points:state.game.settings.otherPoints}).eq("id",state.game.id);
-      if(q.error){alert("設定の保存に失敗しました。");return}
-      await refreshFromSupabase();
-    }else{saveLocal();closeSheet();renderGame()}
-  };
-}
-async function settleGame(){
-  if(!confirm("この時点で決着します。取り消しはできません。"))return;
-  const ranked=state.players.map(p=>({playerId:p.id,periodPoints:periodPointsFor(p.id),cumulative:settledTotal(p.id)+periodPointsFor(p.id)})).sort((a,b)=>b.periodPoints-a.periodPoints);
-  if(isSupabaseMode){
-    const ins=await supabaseClient.from("settlements").insert({game_id:state.game.id,snapshot:{players:ranked}});
-    if(ins.error){alert("決着保存に失敗しました。");return}
-  }
-  const now=new Date().toISOString();
-  state.settlements.push({at:now,players:ranked.map((x,i)=>({...x,rank:i+1}))});
-  state.game.period+=1;state.game.periodStartedAt=todayISO();
-  state.stays.forEach(s=>s._periodStart=state.game.period);
-  state.events.unshift({at:now,text:"決着しました。次の期間を開始しました"});
-  saveLocal();closeSheet();renderGame();
-}
-function openSettlements(){
-  showSheet(`<div class="kicker">SETTLEMENTS</div><h2 class="sheet-title">決着履歴</h2>${state.settlements.slice().reverse().map(s=>`<div class="admin-action"><b>${new Date(s.at).toLocaleString("ja-JP")}</b><span>${s.players.map(x=>`${x.rank}位 ${state.players.find(p=>p.id===x.playerId)?.name||""} ${x.periodPoints}pt`).join(" ／ ")}</span></div>`).join("")||"<p class='muted'>まだ決着はありません。</p>"}`);
-}
-window.openRecord=openRecord;window.openPref=openPref;window.openPlayer=openPlayer;window.focusPlayer=focusPlayer;
-window.openPlayerAdmin=openPlayerAdmin;window.openSettings=openSettings;window.settleGame=settleGame;window.openSettlements=openSettlements;
-init();
+function showPref(code){selectedPref=code;const o=owners()[code]||{};const p=state.players.find(x=>x.id===o.playerId);openSheet(`<button class="sheet-close" onclick="closeSheet()">×</button><h2>${PREF[code].name}</h2><div class="row"><span class="label">状態</span><span class="value">${o.type==='excluded'?'対象外':o.type==='blank'?'ブランク':o.type==='owned'?`${esc(p?.name||'')}が所有`:'未取得'}</span></div>${o.date?`<div class="row"><span class="label">登録日</span><span class="value">${o.date}</span></div>`:''}`)}
+function showPlayer(pid){selectedPlayer=pid;const p=state.players.find(x=>x.id===pid),pts=currentPoints();const list=PREFS.filter(([c])=>owners()[c]?.playerId===pid);openSheet(`<button class="sheet-close" onclick="closeSheet()">×</button><h2>${esc(p.name)}</h2><div class="row"><span class="label">期間ポイント</span><span class="value">${pts[pid]||0}pt</span></div><div class="row"><span class="label">所有県数</span><span class="value">${list.length}県</span></div><div class="row"><span class="label">居住県</span><span class="value">${PREF[p.residence]?.name||'未設定'}</span></div><h3>所有している都道府県</h3><div class="owner-list">${list.map(([c,n])=>`<span class="tag">${n}</span>`).join('')||'<span class="label">まだありません</span>'}</div>`)}
+function recordScreen(){const photo=photoData?`<img class="preview" src="${photoData}" alt="証拠写真プレビュー">`:'';return `<h1 class="screen-title">旅行を記録</h1><p class="screen-sub">旅行した県を1件ずつ登録します。登録前に確認画面があります。</p>${!state.game.started?'<div class="notice">ゲーム開始後に記録を登録できます。</div>':''}<form class="form" onsubmit="event.preventDefault();goConfirm()"><div class="field"><label>プレイヤー</label><select id="r-player">${state.players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div><div class="field"><label>都道府県</label><select id="r-pref">${PREFS.map(([c,n])=>`<option value="${c}" ${excludedCodes().has(c)?'disabled':''}>${n}${excludedCodes().has(c)?'（対象外）':''}</option>`).join('')}</select></div><div class="field"><label>滞在日</label><input id="r-date" type="date" max="${today()}" value="${today()}"></div><div class="field"><label>滞在種別</label><select id="r-type"><option>食事</option><option>観光</option><option>宿泊</option><option>旅行</option><option>その他</option></select></div><div class="field"><label>証拠写真1枚</label><div class="photo-box"><input id="r-photo" type="file" accept="image/*" onchange="readPhoto(event)">${photo}</div></div><div class="field"><label>コメント（任意）</label><textarea id="r-comment" placeholder="旅のメモなど"></textarea></div><button class="primary" type="submit" ${state.game.started?'':'disabled'}>登録の確認画面へ</button></form>`}
+function readPhoto(e){const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=()=>{photoData=r.result;render()};r.readAsDataURL(f)}
+function goConfirm(){const data={playerId:document.querySelector('#r-player').value,prefecture:document.querySelector('#r-pref').value,date:document.querySelector('#r-date').value,type:document.querySelector('#r-type').value,comment:document.querySelector('#r-comment').value,photo:photoData};if(!data.date||data.date>today()||!data.photo){alert('滞在日と証拠写真1枚を入力してください。');return}openSheet(`<button class="sheet-close" onclick="closeSheet()">×</button><h2>登録内容の確認</h2><div class="confirm-card"><div class="row"><span class="label">プレイヤー</span><span class="value">${esc(state.players.find(p=>p.id===data.playerId)?.name)}</span></div><div class="row"><span class="label">都道府県</span><span class="value">${PREF[data.prefecture].name}</span></div><div class="row"><span class="label">滞在日</span><span class="value">${data.date}</span></div><div class="row"><span class="label">滞在種別</span><span class="value">${data.type}</span></div>${data.comment?`<div class="row"><span class="label">コメント</span><span class="value">${esc(data.comment)}</span></div>`:''}<img class="thumb" src="${data.photo}" alt="証拠写真"></div><div class="actions"><button class="secondary" onclick="closeSheet()">戻る</button><button class="primary" style="flex:1" onclick='saveStay(${JSON.stringify(data).replace(/'/g,"&#39;")})'>登録する</button></div>`)}
+function saveStay(data){state.stays.push({id:crypto.randomUUID(),...data,createdAt:new Date().toISOString(),valid:true});save();photoData='';closeSheet();route='history';render();alert('旅行記録を登録しました。')}
+function historyScreen(){const records=[...state.stays].sort((a,b)=>b.date.localeCompare(a.date));return `<h1 class="screen-title">履歴</h1><p class="screen-sub">登録した旅行記録。テスト中はここから削除できます。</p><div class="record-list">${records.length?records.map(r=>`<article class="record"><div class="record-head"><div><h3>${PREF[r.prefecture]?.name||r.prefecture}</h3><small>${esc(state.players.find(p=>p.id===r.playerId)?.name||'')} ・ ${r.date} ・ ${r.type}</small></div><button class="danger" onclick="deleteStay('${r.id}')">削除</button></div>${r.comment?`<p>${esc(r.comment)}</p>`:''}${r.photo?`<img src="${r.photo}" alt="証拠写真">`:''}</article>`).join(''):'<div class="empty">まだ旅行記録がありません。</div>'}</div>`}
+function deleteStay(id){if(!confirm('このテスト用旅行記録を削除しますか？'))return;state.stays=state.stays.filter(s=>s.id!==id);save();render()}
+function setupScreen(){return `<h1 class="screen-title">プレイヤー登録</h1><p class="screen-sub">4人の名前・現在の居住県・色を設定してゲームを開始します。</p><div class="setup-grid">${state.players.map((p,i)=>`<div class="player-setup"><input id="pn-${i}" value="${esc(p.name)}" placeholder="プレイヤー${i+1}"><select id="pr-${i}"><option value="">居住県を選択</option>${PREFS.map(([c,n])=>`<option value="${c}" ${p.residence===c?'selected':''}>${n}</option>`).join('')}</select><select class="color-select" id="pc-${i}">${Object.entries(COLORS).map(([k,c])=>`<option value="${k}" ${p.color===k?'selected':''}>●</option>`).join('')}</select></div>`).join('')}</div><button class="primary" style="margin-top:18px" onclick="startGame()">この4人でゲームを開始</button>`}
+function startGame(){const colors=[];for(let i=0;i<4;i++){const name=document.querySelector('#pn-'+i).value.trim()||`プレイヤー${i+1}`,res=document.querySelector('#pr-'+i).value,col=document.querySelector('#pc-'+i).value;if(!res){alert('4人の居住県を設定してください。');return}if(colors.includes(col)){alert('プレイヤーカラーは重複できません。');return}colors.push(col);state.players[i]={...state.players[i],name,residence:res,color:col}}state.game.started=true;state.game.startDate=state.game.startDate||today();save();route='map';render()}
+function menuScreen(){return `<h1 class="screen-title">メニュー</h1><p class="screen-sub">ゲームの管理と登録をここから行います。</p><div class="menu-list"><button class="menu-item" onclick="route='setup';render()">プレイヤー登録・変更 <span>›</span></button><button class="menu-item" onclick="route='admin';render()">管理者ページ <span>›</span></button><button class="menu-item" onclick="resetDemo()">テストデータを初期化 <span>›</span></button></div>`}
+function adminScreen(){const pts=currentPoints();return `<h1 class="screen-title">管理者ページ</h1><p class="screen-sub">認証なしのMVP管理画面。公開前にSupabase RLS等を設定してください。</p><div class="admin-grid"><div class="metric">ゲーム状態<br><strong>${state.game.started?'進行中':'未開始'}</strong></div><div class="metric">開始日<br><strong>${state.game.startDate||'—'}</strong></div><div class="metric">居住地方ポイント / その他<br><strong>${state.game.residencePoints} / ${state.game.otherPoints} pt</strong></div><div class="panel"><h3>ポイント設定</h3><div class="row"><span>居住地方</span><input id="resPts" type="number" value="${state.game.residencePoints}" style="width:90px"></div><div class="row"><span>その他地方</span><input id="otherPts" type="number" value="${state.game.otherPoints}" style="width:90px"></div><button class="secondary" onclick="saveSettings()">保存</button></div><div class="panel"><h3>決着</h3><p class="screen-sub">地図と累積ポイントは維持し、期間ポイントの起点を記録します。</p><button class="primary" onclick="settle()">現在の状態で決着する</button></div></div>`}
+function saveSettings(){state.game.residencePoints=Number(document.querySelector('#resPts').value)||5;state.game.otherPoints=Number(document.querySelector('#otherPts').value)||10;save();render()}
+function settle(){const pts=currentPoints();state.settlements.push({id:crypto.randomUUID(),at:new Date().toISOString(),points:pts,players:state.players.map(p=>({id:p.id,name:p.name,cumulative:pts[p.id]||0}))});state.game.period+=1;save();render();alert('決着を記録しました。')}
+function resetDemo(){if(!confirm('すべてのテストデータを初期化しますか？'))return;state=structuredClone(DEFAULT);save();route='setup';render()}
+function openSheet(html){let old=document.querySelector('.modal-back');if(old)old.remove();const d=document.createElement('div');d.className='modal-back';d.innerHTML=`<section class="sheet">${html}</section>`;d.addEventListener('click',e=>{if(e.target===d)closeSheet()});document.body.appendChild(d)}function closeSheet(){document.querySelector('.modal-back')?.remove()}
+window.go=(r)=>{route=r;render()};window.showPlayer=showPlayer;window.showPref=showPref;window.closeSheet=closeSheet;window.readPhoto=readPhoto;window.goConfirm=goConfirm;window.saveStay=saveStay;window.deleteStay=deleteStay;window.startGame=startGame;window.saveSettings=saveSettings;window.settle=settle;window.resetDemo=resetDemo;
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+render();
