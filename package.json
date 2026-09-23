@@ -1,9 +1,0 @@
-{
-  "name":"ssa-fill-study",
-  "private":true,
-  "version":"1.0.0",
-  "type":"module",
-  "scripts":{
-    "validate":"node scripts/validate.mjs"
-  }
-}
