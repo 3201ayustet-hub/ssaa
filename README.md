@@ -1,31 +1,32 @@
-# 日本全国陣取り MVP — 改善版
-
-今回の実装ファイルは、既存MVPの改善要望を反映したローカル保存版です。
-
-## 反映内容
-- トップ画面の北海道上にあった謎の線を削除。
-- 地方機能・地方制覇ロジックは削除せず維持。
-- 地図上には地方境界線を描画しない。
-- 都道府県をタップして、その県の旅行登録画面へ直接進める。
-- 滞在登録フォームのイベント処理を見直し、写真選択後に「登録の確認画面へ」が有効になるよう修正。
-- 写真は `capture` を指定せず、端末の写真ライブラリから選択できるよう変更。
-- 写真は登録時に縮小・JPEG化して保存容量を抑制。
-- プレイヤー登録のカラー選択を P1/P2/P3/P4 表示から「赤・青・緑・黄」に変更。
-- プレイヤー情報の変更・保存を維持。
-- 登録済み滞在は履歴から削除可能。
-- ゲーム開始機能は設けない。
-- 「ゲーム終了・次シーズンへ」は、滞在獲得と地図情報を残したまま今期ポイントだけをリセット。
-- テストデータ全削除機能を管理者ページに維持。
-- メニューの各ボタンを実際に遷移できるようにイベント処理を整理。
+# デジ太郎電鉄 Supabase版
 
 ## 配置
-`index.html` / `app.js` / `styles.css` を同じディレクトリへ配置してください。
+GitHubへ以下のファイルを配置してください。
 
-Supabase版を利用する場合は、現在の `supabase.sql` / `config.js` と統合する前に、まずこのMVPで登録操作を確認してください。
+- index.html
+- app.js
+- styles.css
+- config.js
+- supabase.sql
+- icon.svg
 
+## 最初に1回だけ
+SupabaseのSQL Editorで `supabase.sql` を全文実行してください。
 
-## 2.1.0 UI revision
-- App/game title changed to 「デジ太郎電鉄」 with a retro-game style text logo.
-- App icon is a peach-themed SVG.
-- Added 「現在のルール」 to the menu and made it reflect the current point settings.
-- Fixed the stay-date input width so the field matches the other form controls on mobile Safari.
+## この版で直した点
+- 4人が同じSupabaseデータを共有
+- ゲーム開始ボタン・開始状態を不要化
+- 滞在登録のinsert条件から「ゲーム開始済み」を撤去
+- 滞在登録の写真はiPhoneの写真ライブラリから選択
+- 写真は圧縮したdata URLをSupabaseに保存（Storage設定不要）
+- 地図の北海道上などに出ていた都道府県外の装飾線をDOMから除去
+- 地方機能は残すが、トップ地図上に地方境界線は描画しない
+- プレイヤー選択はP1/P2ではなく「赤・青・緑・黄」
+- メニューに現在のルールを表示
+- ゲーム終了で滞在・所有情報を残し、次シーズンへ移行
+- テストデータ全削除をSupabase上で実行
+- プレイヤー情報を変更可能
+- 5秒ごとの同期＋アプリ復帰時同期
+
+## 注意
+Publishable Keyはクライアント公開前提ですが、Secret Keyは絶対に入れていません。
