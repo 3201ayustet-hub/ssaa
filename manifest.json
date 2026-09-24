@@ -1,9 +1,12 @@
 {
-  "name":"日本全国陣取り",
-  "short_name":"陣取り",
+  "name":"デジ太郎電鉄",
+  "short_name":"デジ太郎電鉄",
   "start_url":".",
   "display":"standalone",
   "background_color":"#f5ecd9",
-  "theme_color":"#332b22",
-  "lang":"ja"
+  "theme_color":"#2f281f",
+  "lang":"ja",
+  "icons":[
+    {"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
 }

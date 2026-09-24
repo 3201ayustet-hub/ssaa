@@ -22,3 +22,10 @@
 `index.html` / `app.js` / `styles.css` を同じディレクトリへ配置してください。
 
 Supabase版を利用する場合は、現在の `supabase.sql` / `config.js` と統合する前に、まずこのMVPで登録操作を確認してください。
+
+
+## 2.1.0 UI revision
+- App/game title changed to 「デジ太郎電鉄」 with a retro-game style text logo.
+- App icon is a peach-themed SVG.
+- Added 「現在のルール」 to the menu and made it reflect the current point settings.
+- Fixed the stay-date input width so the field matches the other form controls on mobile Safari.

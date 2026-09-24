@@ -99,7 +99,8 @@ function render(){
     route==='record'?recordScreen():
     route==='history'?historyScreen():
     route==='setup'?setupScreen():
-    route==='admin'?adminScreen():menuScreen()
+    route==='admin'?adminScreen():
+    route==='rules'?rulesScreen():menuScreen()
   }</main>${nav()}`;
   if(route==='map')loadMap();
 }
@@ -110,7 +111,7 @@ function nav(){
 }
 function mapScreen(){
   const completed=state.players.flatMap(p=>completedRegions(p.id).map(r=>({p,r})));
-  return `<header class="topbar"><div class="eyebrow">TRAVEL TERRITORY</div><h1>日本全国陣取り</h1><div class="period">第${state.game.period}期</div></header>
+  return `<header class="topbar"><div class="eyebrow">TRAVEL TERRITORY</div><div class="game-logo" aria-label="デジ太郎電鉄">デジ太郎電鉄</div><div class="period">第${state.game.period}期</div></header>
   <section class="map-wrap"><div id="map">地図を読み込み中…</div></section>
   <div class="legend"><span>● 所有</span><span>■ 未取得</span><span>■ ブランク</span><span>■ 対象外</span><span class="target-count">対象 ${47-excluded().size}県</span></div>
   ${completed.length?`<section class="conquest-strip"><strong>地方制覇</strong>${completed.map(({p,r})=>`<span class="conquest-chip"><i style="background:${COLORS[p.color]}"></i>${esc(p.name)}・${r} <b>1.5倍</b></span>`).join('')}</section>`:''}
@@ -171,7 +172,7 @@ function recordScreen(){
   <form class="form" id="record-form" novalidate>
     <div class="field"><label for="record-player">プレイヤー</label><select id="record-player" required>${state.players.map(p=>`<option value="${p.id}">${esc(p.name)}（${COLOR_NAMES[p.color]}）</option>`).join('')}</select></div>
     <div class="field"><label for="record-pref">都道府県</label><select id="record-pref" required><option value="">選択してください</option>${PREFS.map(([c,n])=>`<option value="${c}" ${selected===c?'selected':''}>${n}</option>`).join('')}</select></div>
-    <div class="field"><label for="record-date">滞在日</label><input id="record-date" type="date" max="${today()}" required></div>
+    <div class="field"><label for="record-date">滞在日</label><input class="date-input" id="record-date" type="date" max="${today()}" required></div>
     <div class="field"><label for="record-type">滞在種別</label><select id="record-type" required><option value="食事">食事</option><option value="観光">観光</option><option value="宿泊">宿泊</option><option value="旅行">旅行</option><option value="その他">その他</option></select></div>
     <div class="field"><label>証拠写真 1枚</label><label class="file-picker"><span>写真ライブラリから選択</span><span id="photo-name">${esc(photoName||'未選択')}</span><input id="record-photo" type="file" accept="image/*" required></label><div id="photo-preview"></div></div>
     <div class="field"><label for="record-comment">コメント（任意）</label><textarea id="record-comment" maxlength="300" placeholder="旅のメモなど"></textarea></div>
@@ -259,8 +260,26 @@ function adminScreen(){
 function menuScreen(){
   return `<h1 class="screen-title">メニュー</h1><p class="screen-sub">ゲームの管理と登録をここから行います。</p><div class="menu-list">
     <button class="menu-item" data-route="setup">プレイヤー登録・変更 <span>›</span></button>
+    <button class="menu-item" data-route="rules">現在のルール <span>›</span></button>
     <button class="menu-item" data-route="admin">管理者ページ <span>›</span></button>
   </div>`;
+}
+function rulesScreen(){
+  const rows = [
+    ['シーズン', `第${state.game.period}期`],
+    ['滞在登録', '都道府県・滞在日・滞在種別・証拠写真1枚が必要'],
+    ['県の所有', '同じ県は最新の滞在日の登録を採用。同日複数登録はブランク'],
+    ['居住県', 'プレイヤーの居住県は対象外'],
+    ['居住地方の登録', `${state.game.residencePoints} pt / 月`],
+    ['その他地方の登録', `${state.game.otherPoints} pt / 月`],
+    ['地方制覇', '地方内の対象県をすべて所有すると、その地方のポイントは1.5倍'],
+    ['ゲーム終了', '滞在獲得・地図の所有情報は残し、今期ポイントだけリセットして次の期へ'],
+    ['テストデータ', '管理者ページから全登録データを初期化可能']
+  ];
+  return `<h1 class="screen-title">現在のルール</h1>
+  <p class="screen-sub">この画面は、現在アプリに設定されているルールを表示します。</p>
+  <section class="rules-card">${rows.map(([k,v])=>`<div class="rule-row"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</section>
+  <p class="screen-sub compact rules-note">※ ポイント設定を変更した場合、この画面にも現在値が反映されます。</p>`;
 }
 function openSheet(html){closeSheet();document.body.insertAdjacentHTML('beforeend',`<div class="modal-back"><section class="sheet">${html}</section></div>`)}
 function closeSheet(){document.querySelector('.modal-back')?.remove()}
