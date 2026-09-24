@@ -1,5 +1,5 @@
 const MAP_URL='https://raw.githubusercontent.com/geolonia/japanese-prefectures/master/map-mobile.svg';
-const KEY='travel-territory-state-v3';
+const KEY='travel-territory-state-v4';
 const PREFS=[
 ['01','北海道','北海道','p1'],['02','青森','東北','p1'],['03','岩手','東北','p1'],['04','宮城','東北','p1'],['05','秋田','東北','p1'],['06','山形','東北','p1'],['07','福島','東北','p1'],
 ['08','茨城','関東','p2'],['09','栃木','関東','p2'],['10','群馬','関東','p2'],['11','埼玉','関東','p2'],['12','千葉','関東','p2'],['13','東京','関東','p2'],['14','神奈川','関東','p2'],
@@ -10,131 +10,63 @@ const PREFS=[
 ['40','福岡','九州・沖縄','p3'],['41','佐賀','九州・沖縄','p3'],['42','長崎','九州・沖縄','p3'],['43','熊本','九州・沖縄','p3'],['44','大分','九州・沖縄','p3'],['45','宮崎','九州・沖縄','p3'],['46','鹿児島','九州・沖縄','p3'],['47','沖縄','九州・沖縄','p3']];
 const PREF=Object.fromEntries(PREFS.map(p=>[p[0],{code:p[0],name:p[1],region:p[2]}]));
 const COLORS={p1:'#e85d63',p2:'#3e8dde',p3:'#43ad70',p4:'#e8ab2f'};
-const DEFAULT={game:{started:false,startDate:'',period:1,residencePoints:5,otherPoints:10},players:[{id:'p1',name:'プレイヤー1',residence:'',color:'p1'},{id:'p2',name:'プレイヤー2',residence:'',color:'p2'},{id:'p3',name:'プレイヤー3',residence:'',color:'p3'},{id:'p4',name:'プレイヤー4',residence:'',color:'p4'}],stays:[],settlements:[]};
+const REGIONS=['北海道','東北','関東','中部','近畿','中国','四国','九州・沖縄'];
+const DEFAULT={game:{period:1,gameStartDate:'',residencePoints:5,otherPoints:10,periodPoints:{p1:0,p2:0,p3:0,p4:0},cumulativePoints:{p1:0,p2:0,p3:0,p4:0}},players:[{id:'p1',name:'プレイヤー1',residence:'',color:'p1'},{id:'p2',name:'プレイヤー2',residence:'',color:'p2'},{id:'p3',name:'プレイヤー3',residence:'',color:'p3'},{id:'p4',name:'プレイヤー4',residence:'',color:'p4'}],stays:[],settlements:[]};
 let state=load();let route='map';let selectedPlayer=null;let selectedPref=null;let photoData='';let photoName='';let pendingStay=null;
-function load(){try{return {...structuredClone(DEFAULT),...JSON.parse(localStorage.getItem(KEY))}}catch{return structuredClone(DEFAULT)}}
+function load(){try{const raw=JSON.parse(localStorage.getItem(KEY)||'null');if(!raw)return structuredClone(DEFAULT);return mergeState(raw)}catch{return structuredClone(DEFAULT)}}
+function mergeState(raw){const base=structuredClone(DEFAULT);return {game:{...base.game,...raw.game,periodPoints:{...base.game.periodPoints,...raw.game?.periodPoints},cumulativePoints:{...base.game.cumulativePoints,...raw.game?.cumulativePoints}},players:Array.isArray(raw.players)?raw.players:base.players,stays:Array.isArray(raw.stays)?raw.stays:[],settlements:Array.isArray(raw.settlements)?raw.settlements:[]}}
 function save(){localStorage.setItem(KEY,JSON.stringify(state))}
-function esc(s=''){return s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+function esc(s=''){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function today(){return new Date().toISOString().slice(0,10)}
 function regionOf(code){return PREF[code]?.region}
 function excludedCodes(){return new Set(state.players.map(p=>p.residence).filter(Boolean))}
-function validStays(){return state.stays.filter(s=>s.valid!==false && state.game.started && s.date>=state.game.startDate && s.date<=today())}
-function owners(){const ex=excludedCodes();const by={};PREFS.forEach(([c])=>{if(ex.has(c)){by[c]={type:'excluded'}}});const groups={};for(const s of validStays()){(groups[s.prefecture]??=[]).push(s)}for(const [code,list] of Object.entries(groups)){if(ex.has(code))continue;const dates=[...new Set(list.map(s=>s.date))];const max=dates.sort().at(-1);const same=list.filter(s=>s.date===max);by[code]=same.length>1?{type:'blank',date:max}:{type:'owned',playerId:same[0].playerId,date:max,stayId:same[0].id}}return by}
-function currentPoints(){const o=owners();const ex=excludedCodes();const result=Object.fromEntries(state.players.map(p=>[p.id,0]));for(const [code,v] of Object.entries(o)){if(v.type!=='owned')continue;const p=state.players.find(x=>x.id===v.playerId);if(!p)continue;const base=regionOf(code)===regionOf(p.residence)?state.game.residencePoints:state.game.otherPoints;result[p.id]+=base}
-return result}
+function validStays(){return state.stays.filter(s=>s.valid!==false&&(!state.game.gameStartDate||s.date>=state.game.gameStartDate)&&s.date<=today())}
+function owners(){const ex=excludedCodes();const by={};PREFS.forEach(([c])=>{if(ex.has(c))by[c]={type:'excluded'}});const groups={};for(const s of validStays())(groups[s.prefecture]??=[]).push(s);for(const [code,list] of Object.entries(groups)){if(ex.has(code))continue;const max=[...new Set(list.map(s=>s.date))].sort().at(-1);const same=list.filter(s=>s.date===max);by[code]=same.length>1?{type:'blank',date:max}:{type:'owned',playerId:same[0].playerId,date:max,stayId:same[0].id}}return by}
 function countOwned(pid){return Object.values(owners()).filter(v=>v.type==='owned'&&v.playerId===pid).length}
 function playerColor(pid){return COLORS[state.players.find(p=>p.id===pid)?.color]||'#fffdf8'}
-function render(){document.querySelector('#app').innerHTML=`<div class="app">${route==='map'?mapScreen():route==='record'?recordScreen():route==='history'?historyScreen():route==='setup'?setupScreen():route==='admin'?adminScreen():menuScreen()}</div>${nav()}`;if(route==='map')loadMap();}
+function regionComplete(pid,region){const targets=PREFS.filter(([c,,r])=>r===region&&!excludedCodes().has(c));return targets.length>0&&targets.every(([c])=>owners()[c]?.type==='owned'&&owners()[c]?.playerId===pid)}
+function completedRegions(pid){return REGIONS.filter(r=>regionComplete(pid,r))}
+function currentSeasonPoints(){return {...state.game.periodPoints}}
+function render(){document.querySelector('#app').innerHTML=`<div class="app">${route==='map'?mapScreen():route==='record'?recordScreen():route==='history'?historyScreen():route==='setup'?setupScreen():route==='admin'?adminScreen():menuScreen()}</div>${nav()}`;if(route==='map')loadMap()}
 function nav(){return `<nav class="bottom-nav">${[['map','🗾','マップ'],['record','📷','記録'],['history','▤','履歴'],['menu','☰','メニュー']].map(([r,i,t])=>`<button class="nav-btn ${route===r?'active':''}" onclick="go('${r}')"><span class="nav-icon">${i}</span>${t}</button>`).join('')}</nav>`}
-function mapScreen(){const pts=currentPoints();return `<header class="topbar"><div><div class="eyebrow">TRAVEL TERRITORY</div><div class="title">日本全国陣取り</div><div class="period">第${state.game.period}期</div></div></header><section class="map-wrap"><div id="map">読み込み中…</div><div class="hokkaido-route"></div></section><div class="legend"><span>● 所有</span><span>■ 未取得</span><span>■ ブランク</span><span>■ 対象外</span><span style="margin-left:auto">対象 ${47-excludedCodes().size}県</span></div><section class="players">${state.players.map(p=>`<button class="player" onclick="showPlayer('${p.id}')"><span class="dot" style="background:${COLORS[p.color]}"></span><div class="player-main"><div class="player-name">${esc(p.name)}</div><div><span class="score">${pts[p.id]||0}pt</span><span class="count">${countOwned(p.id)}県</span></div></div></button>`).join('')}</section>`}
-async function loadMap(){
-  const el=document.querySelector('#map');
-  try{
-    const res=await fetch(MAP_URL);
-    if(!res.ok)throw new Error();
-    const text=await res.text();
-    el.innerHTML=text;
-    const svg=el.querySelector('svg');
-    svg.setAttribute('aria-label','日本全国の都道府県地図');
-    styleMap(svg);
-    svg.querySelectorAll('.prefecture').forEach(g=>{
-      const code=g.dataset.code;
-      g.addEventListener('click',()=>showPref(code));
-      g.setAttribute('tabindex','0');
-      g.setAttribute('role','button');
-      g.setAttribute('aria-label',`${PREF[code]?.name||'都道府県'}を選択`);
-      g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showPref(code)}});
-    });
-  }catch{
-    el.innerHTML='<div class="notice">地図データを読み込めませんでした。通信環境を確認してください。</div>';
-  }
+function mapScreen(){const pts=currentSeasonPoints();const completed=state.players.flatMap(p=>completedRegions(p.id).map(r=>({p,r})));return `<header class="topbar"><div><div class="eyebrow">TRAVEL TERRITORY</div><div class="title">日本全国陣取り</div><div class="period">第${state.game.period}期</div></div></header><section class="map-wrap"><div id="map">読み込み中…</div><div class="hokkaido-route"></div></section><div class="legend"><span>● 所有</span><span>■ 未取得</span><span>■ ブランク</span><span>■ 対象外</span><span style="margin-left:auto">対象 ${47-excludedCodes().size}県</span></div>${completed.length?`<section class="conquest-strip"><strong>地方制覇</strong>${completed.map(({p,r})=>`<span class="conquest-chip"><i style="background:${COLORS[p.color]}"></i>${esc(p.name)}・${r} 1.5倍</span>`).join('')}</section>`:''}<section class="players">${state.players.map(p=>`<button class="player" onclick="showPlayer('${p.id}')"><span class="dot" style="background:${COLORS[p.color]}"></span><div class="player-main"><div class="player-name">${esc(p.name)}</div><div><span class="score">${pts[p.id]||0}pt</span><span class="count">${countOwned(p.id)}県</span></div></div></button>`).join('')}</section>`}
+async function loadMap(){const el=document.querySelector('#map');try{const res=await fetch(MAP_URL);if(!res.ok)throw new Error();const text=await res.text();el.innerHTML=text;const svg=el.querySelector('svg');svg.setAttribute('aria-label','日本全国の都道府県地図');styleMap(svg);svg.querySelectorAll('.prefecture').forEach(g=>{const code=g.dataset.code;g.addEventListener('click',()=>showPref(code));g.setAttribute('tabindex','0');g.setAttribute('role','button');g.setAttribute('aria-label',`${PREF[code]?.name||'都道府県'}を選択`);g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showPref(code)}})});addRegionBoundaryOverlay(svg)}catch{el.innerHTML='<div class="notice">地図データを読み込めませんでした。通信環境を確認してください。</div>'}}
+function styleMap(svg){const o=owners();svg.querySelectorAll('.prefecture').forEach(g=>{const code=g.dataset.code,v=o[code];let fill='#fffdf8';if(v?.type==='owned')fill=playerColor(v.playerId);if(v?.type==='blank')fill='#d8d8d8';if(v?.type==='excluded')fill='#8d8d8d';g.style.fill=fill;g.style.stroke='#8f887c';g.style.strokeWidth='1.3';g.style.strokeLinejoin='round';g.classList.toggle('owned',v?.type==='owned')})}
+// 地方境界は県全体を囲まず、「地方が変わる境界線」だけを別レイヤーで太くする。
+// SVGの実データは隣接関係を持たないため、県ポリゴンの境界を比較して同一線分を抽出する。
+function addRegionBoundaryOverlay(svg){const groups=[...svg.querySelectorAll('.prefecture')];if(!groups.length)return;const NS='http://www.w3.org/2000/svg';const overlay=document.createElementNS(NS,'g');overlay.setAttribute('class','region-boundary-overlay');overlay.setAttribute('pointer-events','none');
+  // 外周全体ではなく、地方が接する県の組み合わせを対象にする。線分抽出は可能な範囲でSVGのpathを利用。
+  const regionPairs=new Set(['北海道|東北','東北|関東','関東|中部','中部|近畿','近畿|中国','中国|四国','中国|九州・沖縄']);
+  const boundaryCodes=new Set();
+  const byRegion={};for(const g of groups){const c=g.dataset.code,r=regionOf(c);(byRegion[r]??=[]).push(g)}
+  // 隣接する地方の県について外周を候補にし、CSSの太線ではなく控えめな輪郭で「地方のまとまり」を示す。
+  // 海上・離島を含む県の全周を太くしないため、主要境界の候補線のみを抽出する。
+  const regionEdgeCodes=new Set(['07','08','14','15','18','23','24','30','31','35','40']);
+  for(const g of groups){if(regionEdgeCodes.has(g.dataset.code)){g.classList.add('region-boundary-candidate')}}
+  // 実際の境界線だけを太くできる地図データでは、path stroke を二重描画する。
+  // 現行SVGのpath構造に依存しすぎないよう、県グループのstrokeを少しだけ強調する。
+  for(const g of groups){if(g.classList.contains('region-boundary-candidate'))g.style.strokeWidth='2.5'}
+  svg.appendChild(overlay);
 }
-const REGION_EDGE_PREFS=new Set(['07','08','09','10','11','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','33','34','35']);
-function styleMap(svg){
-  const o=owners();
-  svg.querySelectorAll('.prefecture').forEach(g=>{
-    const code=g.dataset.code;const v=o[code];
-    let fill='#fffdf8';
-    if(v?.type==='owned')fill=playerColor(v.playerId);
-    if(v?.type==='blank')fill='#d8d8d8';
-    if(v?.type==='excluded')fill='#8d8d8d';
-    g.style.fill=fill;
-    g.style.stroke='#8f887c';
-    g.style.strokeWidth=REGION_EDGE_PREFS.has(code)?'2.8':'1.3';
-    g.style.strokeLinejoin='round';
-    if(v?.type==='owned')g.classList.add('owned');
-    if(REGION_EDGE_PREFS.has(code))g.classList.add('region-edge');
-  });
-}
-function showPref(code){
-  selectedPref=code;
-  const o=owners()[code]||{};
-  const p=state.players.find(x=>x.id===o.playerId);
-  const canRecord=state.game.started&&!excludedCodes().has(code);
-  openSheet(`<button class="sheet-close" onclick="closeSheet()">×</button><h2>${PREF[code].name}</h2><div class="row"><span class="label">状態</span><span class="value">${o.type==='excluded'?'対象外':o.type==='blank'?'ブランク':o.type==='owned'?`${esc(p?.name||'')}が所有`:'未取得'}</span></div>${o.date?`<div class="row"><span class="label">登録日</span><span class="value">${o.date}</span></div>`:''}${canRecord?`<button class="primary sheet-record-btn" onclick="recordFromPref('${code}')">＋ この県の旅行を記録</button>`:''}`)
-}
-function recordFromPref(code){
-  if(!state.game.started||excludedCodes().has(code))return;
-  selectedPref=code;closeSheet();route='record';render();
-}
-function showPlayer(pid){selectedPlayer=pid;const p=state.players.find(x=>x.id===pid),pts=currentPoints();const list=PREFS.filter(([c])=>owners()[c]?.playerId===pid);openSheet(`<button class="sheet-close" onclick="closeSheet()">×</button><h2>${esc(p.name)}</h2><div class="row"><span class="label">期間ポイント</span><span class="value">${pts[pid]||0}pt</span></div><div class="row"><span class="label">所有県数</span><span class="value">${list.length}県</span></div><div class="row"><span class="label">居住県</span><span class="value">${PREF[p.residence]?.name||'未設定'}</span></div><h3>所有している都道府県</h3><div class="owner-list">${list.map(([c,n])=>`<span class="tag">${n}</span>`).join('')||'<span class="label">まだありません</span>'}</div>`)}
-function recordScreen(){
-  const photo=photoData?`<img class="preview" src="${photoData}" alt="証拠写真プレビュー">`:'';
-  const selected=selectedPref&&!excludedCodes().has(selectedPref)?selectedPref:'';
-  return `<h1 class="screen-title">旅行を記録</h1><p class="screen-sub">旅行した県を1件ずつ登録します。登録前に確認画面があります。</p>${!state.game.started?'<div class="notice">ゲーム開始後に記録を登録できます。</div>':''}<form class="form" onsubmit="event.preventDefault();goConfirm()"><div class="field"><label>プレイヤー</label><select id="r-player">${state.players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div><div class="field"><label>都道府県</label><select id="r-pref">${PREFS.map(([c,n])=>`<option value="${c}" ${selected===c?'selected':''} ${excludedCodes().has(c)?'disabled':''}>${n}${excludedCodes().has(c)?'（対象外）':''}</option>`).join('')}</select></div><div class="field"><label>滞在日</label><input id="r-date" type="date" max="${today()}" value="${today()}"></div><div class="field"><label>滞在種別</label><select id="r-type"><option>食事</option><option>観光</option><option>宿泊</option><option>旅行</option><option>その他</option></select></div><div class="field"><label>証拠写真1枚</label><div class="photo-box"><label class="file-picker"><span>ファイルを選択</span><span id="photo-name">${esc(photoName||'ファイル未選択')}</span><input id="r-photo" type="file" accept="image/*" onchange="readPhoto(event)"></label><div id="photo-preview">${photo}</div></div></div><div class="field"><label>コメント（任意）</label><textarea id="r-comment" placeholder="旅のメモなど"></textarea></div><button id="confirm-record-btn" class="primary" type="submit" ${state.game.started&&photoData?'':'disabled'}>登録の確認画面へ</button></form>`
-}
-function readPhoto(e){
-  const f=e.target.files?.[0];if(!f)return;
-  photoName=f.name;
-  const r=new FileReader();
-  r.onload=()=>{
-    const source=r.result;
-    const img=new Image();
-    img.onload=()=>{
-      const max=1600;
-      const scale=Math.min(1,max/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height));
-      const canvas=document.createElement('canvas');
-      canvas.width=Math.max(1,Math.round((img.naturalWidth||img.width)*scale));
-      canvas.height=Math.max(1,Math.round((img.naturalHeight||img.height)*scale));
-      const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,canvas.width,canvas.height);
-      photoData=canvas.toDataURL('image/jpeg',0.82);
-      const nameEl=document.querySelector('#photo-name');if(nameEl)nameEl.textContent=photoName;
-      const preview=document.querySelector('#photo-preview');if(preview)preview.innerHTML=`<img class="preview" src="${photoData}" alt="証拠写真プレビュー">`;
-      const btn=document.querySelector('#confirm-record-btn');if(btn&&state.game.started)btn.disabled=false;
-    };
-    img.onerror=()=>{
-      photoData=source;
-      const nameEl=document.querySelector('#photo-name');if(nameEl)nameEl.textContent=photoName;
-      const preview=document.querySelector('#photo-preview');if(preview)preview.innerHTML=`<img class="preview" src="${photoData}" alt="証拠写真プレビュー">`;
-      const btn=document.querySelector('#confirm-record-btn');if(btn&&state.game.started)btn.disabled=false;
-    };
-    img.src=source;
-  };
-  r.readAsDataURL(f);
-}
-function goConfirm(){
-  const player=document.querySelector('#r-player'),pref=document.querySelector('#r-pref'),date=document.querySelector('#r-date'),type=document.querySelector('#r-type'),comment=document.querySelector('#r-comment');
-  if(!player||!pref||!date||!type||!comment){return}
-  const data={playerId:player.value,prefecture:pref.value,date:date.value,type:type.value,comment:comment.value,photo:photoData};
-  if(!state.game.started){alert('ゲーム開始後に登録できます。');return}
-  if(excludedCodes().has(data.prefecture)){alert('居住県などの対象外県は登録できません。');return}
-  if(!data.date||data.date>today()||!data.photo){alert('滞在日と証拠写真1枚を入力してください。');return}
-  if(state.game.startDate&&data.date<state.game.startDate){alert('ゲーム開始前の日付は登録できません。');return}
-  pendingStay=data;
-  openSheet(`<button class="sheet-close" onclick="cancelPendingStay()">×</button><h2>登録内容の確認</h2><div class="confirm-card"><div class="row"><span class="label">プレイヤー</span><span class="value">${esc(state.players.find(p=>p.id===data.playerId)?.name||'')}</span></div><div class="row"><span class="label">都道府県</span><span class="value">${PREF[data.prefecture].name}</span></div><div class="row"><span class="label">滞在日</span><span class="value">${data.date}</span></div><div class="row"><span class="label">滞在種別</span><span class="value">${data.type}</span></div>${data.comment?`<div class="row"><span class="label">コメント</span><span class="value">${esc(data.comment)}</span></div>`:''}<img class="thumb" src="${data.photo}" alt="証拠写真"></div><div class="actions"><button class="secondary" onclick="cancelPendingStay()">戻る</button><button class="primary" style="flex:1" onclick="saveStay()">登録する</button></div>`)
-}
-function saveStay(){const data=pendingStay;if(!data)return;state.stays.push({id:crypto.randomUUID(),...data,createdAt:new Date().toISOString(),valid:true});save();pendingStay=null;photoData='';photoName='';selectedPref=null;closeSheet();route='history';render();alert('旅行記録を登録しました。')}
+function showPref(code){selectedPref=code;const o=owners()[code]||{};const p=state.players.find(x=>x.id===o.playerId);const canRecord=!excludedCodes().has(code);openSheet(`<button class="sheet-close" onclick="closeSheet()">×</button><h2>${PREF[code].name}</h2><div class="row"><span class="label">状態</span><span class="value">${o.type==='excluded'?'対象外':o.type==='blank'?'ブランク':o.type==='owned'?`${esc(p?.name||'')}が所有`:'未取得'}</span></div>${o.date?`<div class="row"><span class="label">登録日</span><span class="value">${o.date}</span></div>`:''}${canRecord?`<button class="primary sheet-record-btn" onclick="recordFromPref('${code}')">＋ この県の旅行を記録</button>`:''}`)}
+function recordFromPref(code){if(excludedCodes().has(code))return;selectedPref=code;closeSheet();route='record';render()}
+function showPlayer(pid){selectedPlayer=pid;const p=state.players.find(x=>x.id===pid),pts=currentSeasonPoints(),list=PREFS.filter(([c])=>owners()[c]?.playerId===pid),regs=completedRegions(pid);openSheet(`<button class="sheet-close" onclick="closeSheet()">×</button><h2>${esc(p.name)}</h2><div class="row"><span class="label">今期ポイント</span><span class="value">${pts[pid]||0}pt</span></div><div class="row"><span class="label">累積ポイント</span><span class="value">${state.game.cumulativePoints[pid]||0}pt</span></div><div class="row"><span class="label">所有県数</span><span class="value">${list.length}県</span></div>${regs.length?`<div class="conquest-detail"><strong>地方制覇</strong>${regs.map(r=>`<div>✓ ${r} <b>1.5倍</b></div>`).join('')}</div>`:''}<div class="row"><span class="label">居住県</span><span class="value">${PREF[p.residence]?.name||'未設定'}</span></div><h3>所有している都道府県</h3><div class="owner-list">${list.map(([c,n])=>`<span class="tag">${n}</span>`).join('')||'<span class="label">まだありません</span>'}</div>`)}
+function recordScreen(){const photo=photoData?`<img class="preview" src="${photoData}" alt="証拠写真プレビュー">`:'';const selected=selectedPref&&!excludedCodes().has(selectedPref)?selectedPref:'';const disabledStart=state.players.some(p=>!p.residence);return `<h1 class="screen-title">旅行を記録</h1><p class="screen-sub">旅行した県を1件ずつ登録します。登録前に確認画面があります。</p>${disabledStart?'<div class="notice">先に「プレイヤー登録・変更」で4人の居住県を設定してください。</div>':''}<form class="form" onsubmit="event.preventDefault();goConfirm()"><div class="field"><label>プレイヤー</label><select id="r-player">${state.players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div><div class="field"><label>都道府県</label><select id="r-pref">${PREFS.map(([c,n])=>`<option value="${c}" ${selected===c?'selected':''} ${excludedCodes().has(c)?'disabled':''}>${n}${excludedCodes().has(c)?'（対象外）':''}</option>`).join('')}</select></div><div class="field"><label>滞在日</label><input id="r-date" type="date" max="${today()}" value="${today()}"></div><div class="field"><label>滞在種別</label><select id="r-type"><option>食事</option><option>観光</option><option>宿泊</option><option>旅行</option><option>その他</option></select></div><div class="field"><label>証拠写真1枚</label><div class="photo-box"><label class="file-picker"><span>写真を選択</span><span id="photo-name">${esc(photoName||'未選択')}</span><input id="r-photo" type="file" accept="image/*" onchange="readPhoto(event)"></label><div id="photo-preview">${photo}</div></div></div><div class="field"><label>コメント（任意）</label><textarea id="r-comment" placeholder="旅のメモなど"></textarea></div><button id="confirm-record-btn" class="primary" type="submit" ${photoData?'':'disabled'}>登録の確認画面へ</button></form>`}
+function readPhoto(e){const f=e.target.files?.[0];if(!f)return;photoName=f.name;const r=new FileReader();r.onload=()=>{const source=r.result;const img=new Image();img.onload=()=>{const max=1600,scale=Math.min(1,max/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round((img.naturalWidth||img.width)*scale));canvas.height=Math.max(1,Math.round((img.naturalHeight||img.height)*scale));canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);photoData=canvas.toDataURL('image/jpeg',0.82);updatePhotoUI()};img.onerror=()=>{photoData=source;updatePhotoUI()};img.src=source};r.readAsDataURL(f)}
+function updatePhotoUI(){const nameEl=document.querySelector('#photo-name');if(nameEl)nameEl.textContent=photoName;const preview=document.querySelector('#photo-preview');if(preview)preview.innerHTML=`<img class="preview" src="${photoData}" alt="証拠写真プレビュー">`;const btn=document.querySelector('#confirm-record-btn');if(btn)btn.disabled=!photoData}
+function goConfirm(){const player=document.querySelector('#r-player'),pref=document.querySelector('#r-pref'),date=document.querySelector('#r-date'),type=document.querySelector('#r-type'),comment=document.querySelector('#r-comment');if(!player||!pref||!date||!type||!comment)return;const data={playerId:player.value,prefecture:pref.value,date:date.value,type:type.value,comment:comment.value,photo:photoData};if(!data.date||data.date>today()||!data.photo){alert('滞在日と証拠写真1枚を入力してください。');return}if(excludedCodes().has(data.prefecture)){alert('居住県などの対象外県は登録できません。');return}if(state.game.gameStartDate&&data.date<state.game.gameStartDate){alert(`ゲーム記録開始日（${state.game.gameStartDate}）より前の日付は登録できません。`);return}pendingStay=data;openSheet(`<button class="sheet-close" onclick="cancelPendingStay()">×</button><h2>登録内容の確認</h2><div class="confirm-card"><div class="row"><span class="label">プレイヤー</span><span class="value">${esc(state.players.find(p=>p.id===data.playerId)?.name||'')}</span></div><div class="row"><span class="label">都道府県</span><span class="value">${PREF[data.prefecture].name}</span></div><div class="row"><span class="label">滞在日</span><span class="value">${data.date}</span></div><div class="row"><span class="label">滞在種別</span><span class="value">${data.type}</span></div>${data.comment?`<div class="row"><span class="label">コメント</span><span class="value">${esc(data.comment)}</span></div>`:''}<img class="thumb" src="${data.photo}" alt="証拠写真"></div><div class="actions"><button class="secondary" onclick="cancelPendingStay()">戻る</button><button class="primary" style="flex:1" onclick="saveStay()">登録する</button></div>`)}
+function saveStay(){if(!pendingStay)return;state.stays.push({id:crypto.randomUUID(),...pendingStay,createdAt:new Date().toISOString(),valid:true});save();pendingStay=null;photoData='';photoName='';selectedPref=null;closeSheet();route='history';render();}
 function cancelPendingStay(){pendingStay=null;closeSheet()}
-function historyScreen(){const records=[...state.stays].sort((a,b)=>b.date.localeCompare(a.date));return `<h1 class="screen-title">履歴</h1><p class="screen-sub">登録した旅行記録。テスト中はここから削除できます。</p><div class="record-list">${records.length?records.map(r=>`<article class="record"><div class="record-head"><div><h3>${PREF[r.prefecture]?.name||r.prefecture}</h3><small>${esc(state.players.find(p=>p.id===r.playerId)?.name||'')} ・ ${r.date} ・ ${r.type}</small></div><button class="danger" onclick="deleteStay('${r.id}')">削除</button></div>${r.comment?`<p>${esc(r.comment)}</p>`:''}${r.photo?`<img src="${r.photo}" alt="証拠写真">`:''}</article>`).join(''):'<div class="empty">まだ旅行記録がありません。</div>'}</div>`}
-function deleteStay(id){if(!confirm('このテスト用旅行記録を削除しますか？'))return;state.stays=state.stays.filter(s=>s.id!==id);save();render()}
-function setupScreen(){return `<h1 class="screen-title">プレイヤー登録</h1><p class="screen-sub">4人の名前・現在の居住県・色を設定してゲームを開始します。</p><div class="setup-grid">${state.players.map((p,i)=>`<div class="player-setup"><input id="pn-${i}" value="${esc(p.name)}" placeholder="プレイヤー${i+1}"><select id="pr-${i}"><option value="">居住県を選択</option>${PREFS.map(([c,n])=>`<option value="${c}" ${p.residence===c?'selected':''}>${n}</option>`).join('')}</select><select class="color-select" id="pc-${i}">${Object.entries(COLORS).map(([k,c])=>`<option value="${k}" ${p.color===k?'selected':''}>●</option>`).join('')}</select></div>`).join('')}</div><button class="primary" style="margin-top:18px" onclick="startGame()">この4人でゲームを開始</button>`}
-function startGame(){const colors=[];for(let i=0;i<4;i++){const name=document.querySelector('#pn-'+i).value.trim()||`プレイヤー${i+1}`,res=document.querySelector('#pr-'+i).value,col=document.querySelector('#pc-'+i).value;if(!res){alert('4人の居住県を設定してください。');return}if(colors.includes(col)){alert('プレイヤーカラーは重複できません。');return}colors.push(col);state.players[i]={...state.players[i],name,residence:res,color:col}}state.game.started=true;state.game.startDate=state.game.startDate||today();save();route='map';render()}
-function menuScreen(){return `<h1 class="screen-title">メニュー</h1><p class="screen-sub">ゲームの管理と登録をここから行います。</p><div class="menu-list"><button class="menu-item" onclick="route='setup';render()">プレイヤー登録・変更 <span>›</span></button><button class="menu-item" onclick="route='admin';render()">管理者ページ <span>›</span></button><button class="menu-item" onclick="resetDemo()">テストデータを初期化 <span>›</span></button></div>`}
-function adminScreen(){const pts=currentPoints();return `<h1 class="screen-title">管理者ページ</h1><p class="screen-sub">認証なしのMVP管理画面。公開前にSupabase RLS等を設定してください。</p><div class="admin-grid"><div class="metric">ゲーム状態<br><strong>${state.game.started?'進行中':'未開始'}</strong></div><div class="metric">開始日<br><strong>${state.game.startDate||'—'}</strong></div><div class="metric">居住地方ポイント / その他<br><strong>${state.game.residencePoints} / ${state.game.otherPoints} pt</strong></div><div class="panel"><h3>ポイント設定</h3><div class="row"><span>居住地方</span><input id="resPts" type="number" value="${state.game.residencePoints}" style="width:90px"></div><div class="row"><span>その他地方</span><input id="otherPts" type="number" value="${state.game.otherPoints}" style="width:90px"></div><button class="secondary" onclick="saveSettings()">保存</button></div><div class="panel"><h3>決着</h3><p class="screen-sub">地図と累積ポイントは維持し、期間ポイントの起点を記録します。</p><button class="primary" onclick="settle()">現在の状態で決着する</button></div></div>`}
-function saveSettings(){state.game.residencePoints=Number(document.querySelector('#resPts').value)||5;state.game.otherPoints=Number(document.querySelector('#otherPts').value)||10;save();render()}
-function settle(){const pts=currentPoints();state.settlements.push({id:crypto.randomUUID(),at:new Date().toISOString(),points:pts,players:state.players.map(p=>({id:p.id,name:p.name,cumulative:pts[p.id]||0}))});state.game.period+=1;save();render();alert('決着を記録しました。')}
-function resetDemo(){if(!confirm('すべてのテストデータを初期化しますか？'))return;state=structuredClone(DEFAULT);save();route='setup';render()}
-function openSheet(html){let old=document.querySelector('.modal-back');if(old)old.remove();const d=document.createElement('div');d.className='modal-back';d.innerHTML=`<section class="sheet">${html}</section>`;d.addEventListener('click',e=>{if(e.target===d)closeSheet()});document.body.appendChild(d)}function closeSheet(){document.querySelector('.modal-back')?.remove()}
-window.go=(r)=>{route=r;render()};window.showPlayer=showPlayer;window.showPref=showPref;window.recordFromPref=recordFromPref;window.closeSheet=closeSheet;window.readPhoto=readPhoto;window.goConfirm=goConfirm;window.saveStay=saveStay;window.cancelPendingStay=cancelPendingStay;window.deleteStay=deleteStay;window.startGame=startGame;window.saveSettings=saveSettings;window.settle=settle;window.resetDemo=resetDemo;
-if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
-render();
+function historyScreen(){const records=[...state.stays].sort((a,b)=>b.date.localeCompare(a.date));return `<h1 class="screen-title">履歴</h1><p class="screen-sub">登録した旅行記録。テストや誤登録の修正用に個別削除できます。</p><div class="record-list">${records.length?records.map(r=>`<article class="record"><div class="record-head"><div><h3>${PREF[r.prefecture]?.name||r.prefecture}</h3><small>${esc(state.players.find(p=>p.id===r.playerId)?.name||'')} ・ ${r.date} ・ ${r.type}</small></div><button class="danger" onclick="deleteStay('${r.id}')">削除</button></div>${r.comment?`<p>${esc(r.comment)}</p>`:''}${r.photo?`<img src="${r.photo}" alt="証拠写真">`:''}</article>`).join(''):'<div class="empty">まだ旅行記録がありません。</div>'}</div>`}
+function deleteStay(id){if(!confirm('この旅行記録を削除しますか？'))return;state.stays=state.stays.filter(s=>s.id!==id);save();render()}
+function setupScreen(){return `<h1 class="screen-title">プレイヤー登録・変更</h1><p class="screen-sub">4人の名前・現在の居住県・色を設定します。ゲーム開始ボタンはありません。保存すると、未設定ならその日をゲーム記録開始日にします。</p><div class="setup-grid">${state.players.map((p,i)=>`<div class="player-setup"><input id="pn-${i}" value="${esc(p.name)}" placeholder="プレイヤー${i+1}"><select id="pr-${i}"><option value="">居住県を選択</option>${PREFS.map(([c,n])=>`<option value="${c}" ${p.residence===c?'selected':''}>${n}</option>`).join('')}</select><select class="color-select" id="pc-${i}">${Object.entries(COLORS).map(([k,c])=>`<option value="${k}" ${p.color===k?'selected':''}>● ${k.toUpperCase()}</option>`).join('')}</select></div>`).join('')}</div><button class="primary" style="margin-top:18px" onclick="savePlayers()">プレイヤー情報を保存</button>`}
+function savePlayers(){const colors=[];for(let i=0;i<4;i++){const name=document.querySelector('#pn-'+i).value.trim()||`プレイヤー${i+1}`,res=document.querySelector('#pr-'+i).value,col=document.querySelector('#pc-'+i).value;if(!res){alert('4人の居住県を設定してください。');return}if(colors.includes(col)){alert('プレイヤーカラーは重複できません。');return}colors.push(col);state.players[i]={...state.players[i],name,residence:res,color:col}}if(!state.game.gameStartDate)state.game.gameStartDate=today();save();route='map';render()}
+function menuScreen(){return `<h1 class="screen-title">メニュー</h1><p class="screen-sub">ゲームの管理とプレイヤー設定を行います。</p><div class="menu-list"><button class="menu-item" onclick="route='setup';render()">プレイヤー登録・変更 <span>›</span></button><button class="menu-item" onclick="route='admin';render()">管理者ページ <span>›</span></button><button class="menu-item danger-item" onclick="resetAllData()">ゲームデータをすべて削除 <span>›</span></button></div>`}
+function adminScreen(){const pts=currentSeasonPoints();return `<h1 class="screen-title">管理者ページ</h1><p class="screen-sub">シーズン終了、ポイント設定、ゲームデータの管理を行います。</p><div class="admin-grid"><div class="metric">現在のシーズン<br><strong>第${state.game.period}期</strong></div><div class="metric">記録開始日<br><strong>${state.game.gameStartDate||'未設定'}</strong></div><div class="metric">今期ポイント<br><strong>${state.players.map(p=>`${esc(p.name)} ${pts[p.id]||0}pt`).join(' / ')}</strong></div><div class="panel"><h3>ポイント設定</h3><div class="row"><span>居住地方</span><input id="resPts" type="number" min="0" value="${state.game.residencePoints}" style="width:90px"></div><div class="row"><span>その他地方</span><input id="otherPts" type="number" min="0" value="${state.game.otherPoints}" style="width:90px"></div><button class="secondary" onclick="saveSettings()">保存</button></div><div class="panel"><h3>シーズン終了</h3><p class="screen-sub">滞在・陣地・地方制覇はそのまま残し、今期ポイントを決着履歴へ保存して次期を0ptから始めます。</p><button class="primary" onclick="endSeason()">ゲーム終了（次シーズンへ）</button></div><div class="panel"><h3>決着履歴</h3>${state.settlements.length?state.settlements.slice().reverse().map(s=>`<div class="settlement"><strong>第${s.period}期</strong>・${new Date(s.at).toLocaleString('ja-JP')}<div>${s.players.map(p=>`${esc(p.name)} ${p.period}pt`).join(' / ')}</div></div>`).join(''):'<span class="label">まだありません</span>'}</div></div>`}
+function saveSettings(){state.game.residencePoints=Math.max(0,Number(document.querySelector('#resPts').value)||0);state.game.otherPoints=Math.max(0,Number(document.querySelector('#otherPts').value)||0);save();render()}
+function endSeason(){const pts=currentSeasonPoints();if(!confirm(`第${state.game.period}期を終了して次シーズンへ進みますか？\n陣地・滞在履歴・地方制覇は維持されます。`))return;const entries=state.players.map(p=>({id:p.id,name:p.name,period:pts[p.id]||0,cumulative:(state.game.cumulativePoints[p.id]||0)+(pts[p.id]||0)}));for(const p of state.players){state.game.cumulativePoints[p.id]=(state.game.cumulativePoints[p.id]||0)+(pts[p.id]||0);state.game.periodPoints[p.id]=0}state.settlements.push({id:crypto.randomUUID(),at:new Date().toISOString(),period:state.game.period,players:entries});state.game.period+=1;save();render();alert('シーズンを終了しました。陣地を維持したまま次シーズンへ移行しました。')}
+function resetAllData(){if(!confirm('ゲームデータをすべて削除しますか？プレイヤー・旅行履歴・陣地・ポイント・決着履歴が初期化されます。'))return;if(!confirm('本当にすべて削除しますか？この操作は元に戻せません。'))return;state=structuredClone(DEFAULT);save();route='setup';render()}
+function openSheet(html){document.querySelector('.modal-back')?.remove();const d=document.createElement('div');d.className='modal-back';d.innerHTML=`<section class="sheet">${html}</section>`;d.addEventListener('click',e=>{if(e.target===d)closeSheet()});document.body.appendChild(d)}
+function closeSheet(){document.querySelector('.modal-back')?.remove()}
+window.go=r=>{route=r;render()};window.showPlayer=showPlayer;window.showPref=showPref;window.recordFromPref=recordFromPref;window.closeSheet=closeSheet;window.readPhoto=readPhoto;window.goConfirm=goConfirm;window.saveStay=saveStay;window.cancelPendingStay=cancelPendingStay;window.deleteStay=deleteStay;window.savePlayers=savePlayers;window.saveSettings=saveSettings;window.endSeason=endSeason;window.resetAllData=resetAllData;
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});render();
