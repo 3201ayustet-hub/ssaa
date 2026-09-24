@@ -1,15 +1,19 @@
-# SSAA 修正版ファイル
+# 地方一覧ページ追加
 
-今回の `42501 new row violates row-level security policy for table "ssaa_stays"` を止めるための修正版です。
+メニューに「地方一覧」を追加し、8地方と所属都道府県を一覧表示します。
 
-## GitHubで置き換える
-- `config.js` → このフォルダの `config.js`
+## 変更するファイル
+- app.js
+- styles.css
 
-## Supabase側
-`ssaa_rls_fix.sql` はGitHubに置くだけではDBへ反映されません。
-Supabase SQL Editorで **このSQLを1回だけ** 実行してください。
+## app.js
+同梱の `region-list-app.js` に書いてある3か所を既存の `app.js` に反映してください。
 
-これまで作った確認用SQLを順番に実行する必要はありません。
+1. メニューに「地方一覧」を追加
+2. `regionListScreen()` を追加
+3. `nav()` に `regions` の分岐を追加
 
-この修正では既存の `ssaa_*` テーブルやデータを削除しません。
-`ssaa_stays` のRLSだけでなく、SSAA専用4テーブルのRLSを同じ方針に統一します。
+## styles.css
+同梱の `region-list-styles.css` の内容を末尾に追加してください。
+
+Supabaseの変更はありません。

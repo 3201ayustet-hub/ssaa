@@ -1,0 +1,33 @@
+/* 地方一覧ページ */
+.region-list{
+  display:grid;
+  gap:12px;
+}
+.region-card{
+  background:var(--paper);
+  border:2px solid var(--line);
+  border-radius:10px;
+  padding:14px;
+  box-shadow:var(--shadow);
+}
+.region-card h2{
+  margin:0 0 10px;
+  font-size:18px;
+  font-weight:1000;
+  border-bottom:2px dashed #cdbfa9;
+  padding-bottom:8px;
+}
+.region-prefs{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.region-prefs span{
+  display:inline-block;
+  padding:7px 9px;
+  background:#f2e8d5;
+  border:1px solid #c7b79e;
+  border-radius:6px;
+  font-size:13px;
+  font-weight:800;
+}
