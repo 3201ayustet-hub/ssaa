@@ -1,10 +1,9 @@
 {
-  "name": "日本全国陣取り",
-  "short_name": "全国陣取り",
-  "start_url": ".",
-  "display": "standalone",
-  "background_color": "#fbf7ee",
-  "theme_color": "#fbf7ee",
-  "lang": "ja",
-  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+  "name":"日本全国陣取り",
+  "short_name":"陣取り",
+  "start_url":".",
+  "display":"standalone",
+  "background_color":"#f5ecd9",
+  "theme_color":"#332b22",
+  "lang":"ja"
 }
