@@ -29,8 +29,8 @@ body{padding-bottom:86px}button,input,select,textarea{font:inherit}button{cursor
 .bottom-nav{position:fixed;z-index:20;left:0;right:0;bottom:0;background:#2f281f;border-top:3px solid #6d5b44;padding:7px max(12px,env(safe-area-inset-left)) calc(7px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(4,1fr)}
 .nav-btn{border:0;background:transparent;color:#d9c9af;padding:5px 2px;font-size:11px;font-weight:1000}.nav-btn span{font-size:20px;display:block;margin-bottom:1px}.nav-btn.active{color:#fff2c8}
 .screen-title{font-size:27px;font-weight:1000;margin:20px 0 6px}.screen-sub{color:var(--muted);margin:0 0 18px}.screen-sub.compact{font-size:12px;margin:0 0 10px}
-.form{display:grid;gap:15px}.field{display:grid;gap:7px}.field label{font-weight:1000}.field input,.field select,.field textarea{width:100%;background:var(--paper);border:2px solid var(--line);border-radius:9px;padding:13px;outline:none}
-.field textarea{min-height:110px}.field input.date-input{min-width:0;max-width:100%;width:100%;display:block;padding-inline:12px;font-size:16px;line-height:1.2;-webkit-appearance:auto;appearance:auto}
+.form{display:grid;gap:15px;min-width:0}.field{display:grid;gap:7px;min-width:0}.field label{font-weight:1000}.field input,.field select,.field textarea{width:100%;max-width:100%;min-width:0;background:var(--paper);border:2px solid var(--line);border-radius:9px;padding:13px;outline:none}
+.field textarea{min-height:110px}.field input.date-input{min-width:0;max-width:100%;width:100%;display:block;padding:12px 8px;font-size:16px;line-height:1.2;overflow:hidden;-webkit-appearance:none;appearance:none}
 .preview,.thumb{width:100%;max-height:320px;object-fit:cover;border:2px solid #8c7a61;border-radius:9px;margin-top:10px}
 .file-picker{display:flex;align-items:center;gap:10px;min-height:56px;background:var(--paper);border:2px solid var(--line);border-radius:9px;padding:8px 10px;cursor:pointer}
 .file-picker span:first-child{background:#e3d5bb;border:2px solid #8d795c;padding:8px 11px;font-weight:1000;white-space:nowrap}
