@@ -21,7 +21,7 @@ let loading=false,saveLock=false;
 
 const clone=x=>JSON.parse(JSON.stringify(x));
 const today=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Tokyo'});
-const esc=s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const esc=s=>String(s??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const uid=()=>crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&3|8);return v.toString(16)});
 function headers(extra={}){return {'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json',...extra}}
 async function sb(path,opts={}){
@@ -95,10 +95,33 @@ function owners(){
   }
   return result;
 }
+
+/* pointsFor() から呼ばれる日付指定版。
+   ここが未定義だったため、以前は「ownersAt is not defined」で停止していました。 */
+function ownersAt(date){
+  const result={},ex=excluded(),groups={};
+  PREFS.forEach(([c])=>{if(ex.has(c))result[c]={type:'excluded'}});
+  for(const s of db.stays){
+    if(s.stay_date>date)continue;
+    (groups[s.prefecture_code]??=[]).push(s);
+  }
+  for(const [code,list] of Object.entries(groups)){
+    if(ex.has(code))continue;
+    const latest=[...new Set(list.map(s=>s.stay_date))].sort().at(-1);
+    const same=list.filter(s=>s.stay_date===latest);
+    result[code]=same.length>1?{type:'blank',date:latest}:{type:'owned',playerId:same[0].player_id,date:latest,stayId:same[0].id};
+  }
+  return result;
+}
+
 function countOwned(pid){return Object.values(owners()).filter(x=>x.type==='owned'&&x.playerId===pid).length}
 function regionComplete(pid,region){
   const targets=PREFS.filter(([c,,r])=>r===region&&!excluded().has(c));
   return targets.length>0&&targets.every(([c])=>owners()[c]?.type==='owned'&&owners()[c].playerId===pid)
+}
+function regionCompleteAt(pid,region,ownership=ownersAt(today())){
+  const targets=PREFS.filter(([c,,r])=>r===region&&!excluded().has(c));
+  return targets.length>0&&targets.every(([c])=>ownership[c]?.type==='owned'&&ownership[c].playerId===pid)
 }
 function completedRegions(pid){return REGIONS.filter(r=>regionComplete(pid,r))}
 /* ポイントは滞在登録時点で、その県を取得したプレイヤーに付与する。
@@ -249,7 +272,8 @@ async function confirmPending(){
     const d=pending;
     await insert('stays',{game_id:db.game.id,player_id:d.playerId,prefecture_code:d.prefecture,stay_date:d.date,stay_type:d.type,photo_path:d.photo,comment:d.comment||null});
     pending=null;photoData='';photoName='';selectedPref='';closeSheet();await refresh();route='history';render();alert('旅行記録を登録しました。');
-  }catch(e){alert(`登録できませんでした。\n${e.message}`)}finally{saveLock=false}
+  }catch(e){alert(`登録できませんでした。\
+${e.message}`)}finally{saveLock=false}
 }
 async function refresh(){
   db.stays=await select('stays',`select=*&game_id=eq.${db.game.id}&order=stay_date.asc,created_at.asc`);
@@ -295,7 +319,8 @@ async function savePlayers(){
       used.add(color);await update('players',`id=eq.${p.id}`,{name,residence_prefecture:residence,color});
     }
     await refresh();render();alert('プレイヤー情報を保存しました。');
-  }catch(e){alert(`保存できませんでした。\n${e.message}`)}
+  }catch(e){alert(`保存できませんでした。\
+${e.message}`)}
 }
 async function endSeason(){
   if(!confirm(`第${db.game.current_period}期を終了します。滞在獲得は残し、ポイントだけをリセットして次のシーズンへ移行します。`))return;
@@ -304,7 +329,8 @@ async function endSeason(){
     await insert('settlements',{game_id:db.game.id,snapshot:{period:db.game.current_period,points}});
     await update('games',`id=eq.${db.game.id}`,{current_period:db.game.current_period+1,season_start_date:today()});
     await refresh();render();alert('ゲームを終了し、次のシーズンへ移行しました。');
-  }catch(e){alert(`シーズン終了に失敗しました。\n${e.message}`)}
+  }catch(e){alert(`シーズン終了に失敗しました。\
+${e.message}`)}
 }
 async function resetAll(){
   if(!confirm('旅行記録・決着履歴・プレイヤー設定をすべて初期化します。4人全員の端末からも消えます。よろしいですか？'))return;
@@ -319,7 +345,8 @@ async function resetAll(){
     }
     await update('games',`id=eq.${db.game.id}`,{current_period:1,season_start_date:today(),home_points:5,other_points:10});
     await refresh();route='map';render();alert('テストデータを初期化しました。');
-  }catch(e){alert(`初期化に失敗しました。\n${e.message}`)}
+  }catch(e){alert(`初期化に失敗しました。\
+${e.message}`)}
 }
 document.addEventListener('click',async e=>{
   const r=e.target.closest('[data-route]');if(r){route=r.dataset.route;selectedPref='';render();return}
@@ -328,7 +355,8 @@ document.addEventListener('click',async e=>{
   const rp=e.target.closest('[data-record-pref]');if(rp){selectedPref=rp.dataset.recordPref;closeSheet();route='record';render();return}
   const del=e.target.closest('[data-delete-stay]');if(del){
     if(!confirm('この旅行記録を削除しますか？'))return;
-    try{await remove('stays',`id=eq.${del.dataset.deleteStay}`);await refresh();render()}catch(err){alert(`削除できませんでした。\n${err.message}`)}
+    try{await remove('stays',`id=eq.${del.dataset.deleteStay}`);await refresh();render()}catch(err){alert(`削除できませんでした。\
+${err.message}`)}
     return
   }
   if(e.target.id==='confirm-record'){openRecordConfirm();return}
@@ -338,7 +366,8 @@ document.addEventListener('click',async e=>{
     try{
       await update('games',`id=eq.${db.game.id}`,{home_points:Number(document.querySelector('#home-points').value)||0,other_points:Number(document.querySelector('#other-points').value)||0});
       await refresh();render();alert('ポイント設定を保存しました。');
-    }catch(err){alert(`保存できませんでした。\n${err.message}`)}
+    }catch(err){alert(`保存できませんでした。\
+${err.message}`)}
     return
   }
   if(e.target.id==='end-season'){await endSeason();return}
