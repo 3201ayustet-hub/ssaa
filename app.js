@@ -83,87 +83,58 @@ function renderError(e){
 }
 function excluded(){return new Set(db.players.map(p=>p.residence_prefecture).filter(Boolean))}
 function validStays(){return db.stays.filter(s=>s.stay_date<=today())}
-
-/* 所有状況を指定日時点で判定する。
-   毎月1日のポイント判定では、その日の時点で最後に登録された滞在を使う。 */
-function ownersAt(asOfDate){
+function owners(){
   const result={},ex=excluded(),groups={};
   PREFS.forEach(([c])=>{if(ex.has(c))result[c]={type:'excluded'}});
-  for(const s of db.stays){
-    if(s.stay_date>asOfDate||s.stay_date>today())continue;
-    (groups[s.prefecture_code]??=[]).push(s);
-  }
+  for(const s of validStays())(groups[s.prefecture_code]??=[]).push(s);
   for(const [code,list] of Object.entries(groups)){
     if(ex.has(code))continue;
     const latest=[...new Set(list.map(s=>s.stay_date))].sort().at(-1);
     const same=list.filter(s=>s.stay_date===latest);
-    result[code]=same.length>1
-      ? {type:'blank',date:latest}
-      : {type:'owned',playerId:same[0].player_id,date:latest,stayId:same[0].id};
+    result[code]=same.length>1?{type:'blank',date:latest}:{type:'owned',playerId:same[0].player_id,date:latest,stayId:same[0].id};
   }
   return result;
 }
-
-function owners(){return ownersAt(today())}
-
-function countOwned(pid){
-  return Object.values(owners()).filter(x=>x.type==='owned'&&x.playerId===pid).length
-}
-
-function regionCompleteAt(pid,region,owned){
-  const targets=PREFS.filter(([c,,r])=>r===region&&!excluded().has(c));
-  return targets.length>0&&targets.every(([c])=>owned[c]?.type==='owned'&&owned[c].playerId===pid)
-}
-
+function countOwned(pid){return Object.values(owners()).filter(x=>x.type==='owned'&&x.playerId===pid).length}
 function regionComplete(pid,region){
-  return regionCompleteAt(pid,region,owners())
+  const targets=PREFS.filter(([c,,r])=>r===region&&!excluded().has(c));
+  return targets.length>0&&targets.every(([c])=>owners()[c]?.type==='owned'&&owners()[c].playerId===pid)
 }
-
 function completedRegions(pid){return REGIONS.filter(r=>regionComplete(pid,r))}
-
-/* シーズン開始日以降に到来した「毎月1日」だけをポイント対象日にする。
-   開始日が1日ならその日も対象。開始日が2日以降なら翌月1日から対象。 */
-function monthlyAwardDates(startDate,endDate=today()){
-  if(!startDate||startDate>endDate)return [];
-  const out=[];
-  let cursor=new Date(`${startDate}T00:00:00+09:00`);
-  const end=new Date(`${endDate}T00:00:00+09:00`);
-  let y=cursor.getFullYear(),m=cursor.getMonth();
-  if(cursor.getDate()>1){m+=1;if(m>11){m=0;y+=1}}
-  while(true){
-    const d=new Date(y,m,1);
-    if(d>end)break;
-    const iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
-    if(iso>=startDate&&iso<=endDate)out.push(iso);
-    m+=1;if(m>11){m=0;y+=1}
-  }
-  return out;
-}
-
-/* ポイントは滞在登録時には発生しない。
-   毎月1日の時点で保有していた県について、その月のポイントを加算する。 */
+/* ポイントは滞在登録時点で、その県を取得したプレイヤーに付与する。
+   その後、別プレイヤーに所有権を奪われた場合は、その県から得たポイントを0として扱う。 */
 function pointsFor(pid){
-  const start=db.game?.season_start_date||today();
-  const p=db.players.find(x=>x.id===pid);
-  const homeRegion=p?.residence_prefecture?PREF[p.residence_prefecture]?.region:null;
   let total=0;
+  const ex=excluded();
 
-  for(const awardDate of monthlyAwardDates(start)){
-    const owned=ownersAt(awardDate);
-    const done=new Set(REGIONS.filter(r=>regionCompleteAt(pid,r,owned)));
+  for(const s of db.stays){
+    if(s.player_id!==pid||ex.has(s.prefecture_code))continue;
 
-    for(const [code,v] of Object.entries(owned)){
-      if(v.type!=='owned'||v.playerId!==pid)continue;
-      const base=PREF[code]?.region===homeRegion
-        ?Number(db.game.home_points)
-        :Number(db.game.other_points);
-      total+=base*(done.has(PREF[code].region)?1.5:1);
-    }
+    // 同じ県について、その登録が現在の所有権を持っている場合だけポイントを有効にする。
+    // 同日複数登録はブランクなのでポイント対象外。
+    const sameCode=db.stays.filter(x=>x.prefecture_code===s.prefecture_code);
+    const latest=sameCode.map(x=>x.stay_date).sort().at(-1);
+    if(s.stay_date!==latest)continue;
+
+    const sameDate=sameCode.filter(x=>x.stay_date===latest);
+    if(sameDate.length!==1||sameDate[0].player_id!==pid)continue;
+
+    const region=PREF[s.prefecture_code]?.region;
+    const p=db.players.find(x=>x.id===pid);
+    const homeRegion=p?.residence_prefecture?PREF[p.residence_prefecture]?.region:null;
+    const base=region===homeRegion
+      ?Number(db.game.home_points)
+      :Number(db.game.other_points);
+
+    // 現在の地方制覇を判定。制覇中の地方は1.5倍。
+    const owned=ownersAt(today());
+    const conquered=regionCompleteAt(pid,region,owned);
+    total+=base*(conquered?1.5:1);
   }
+
   return Math.round(total*10)/10;
 }
 
-/* 過去の期の決着ポイント + 現在の期の月次ポイント */
 function cumulativePoints(pid){
   const historical=db.settlements.reduce((sum,s)=>{
     const value=Number(s.snapshot?.points?.[pid]??0);
